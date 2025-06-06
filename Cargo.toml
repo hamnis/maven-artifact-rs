@@ -6,12 +6,10 @@ edition = "2024"
 [dependencies]
 serde-xml-rs = "0.8.1"
 url = "2.5.4"
-serde = { version = "1.0.219", features = ["derive"] }
-reqwest = { version = "0.12.19", default-features = false, optional = true }
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "h2", "stream"] }
 bytes = "1"
 thiserror = "2"
-
-
-[features]
-default = ["reqwest"]
-reqwest = ["reqwest/deflate", "reqwest/rustls-tls", "reqwest/h2"]
+futures = "0.3"
+tokio = "1.45"
+tempfile = "3"

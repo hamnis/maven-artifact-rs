@@ -7,8 +7,6 @@ use url::Url;
 
 mod artifact;
 mod metadata;
-#[cfg(feature = "reqwest")]
-mod reqwest_async;
 mod resolver;
 
 #[derive(Debug, Error)]
