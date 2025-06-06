@@ -3,20 +3,20 @@ use serde::{Deserialize, Serialize};
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct VersionedMetadata {
+pub struct VersionedMetadata {
     pub groupId: GroupId,
     pub artifactId: ArtifactId,
     pub versioning: Option<Versioning>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Versions {
+pub struct Versions {
     version: Vec<Version>,
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Versioning {
+pub struct Versioning {
     pub latest: Option<Version>,
     pub release: Option<Version>,
     pub versions: Versions,
@@ -27,12 +27,12 @@ struct Versioning {
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Snapshot {
+pub struct Snapshot {
     pub timestamp: String,
     pub buildNumber: i32,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct SnapshotVersion {
+pub struct SnapshotVersion {
     pub classifier: Option<Classifier>,
     pub extension: Option<String>,
     pub version: Version,

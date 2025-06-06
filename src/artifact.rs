@@ -1,7 +1,34 @@
 use crate::*;
 use std::fmt::{Display, Formatter};
-use std::ops::Deref;
 use url::Url;
+
+pub struct PartialArtifact {
+    pub group_id: GroupId,
+    pub artifact_id: ArtifactId,
+}
+
+impl PartialArtifact {
+    pub fn new(group_id: GroupId, artifact_id: ArtifactId) -> PartialArtifact {
+        PartialArtifact {
+            group_id,
+            artifact_id,
+        }
+    }
+
+    pub fn into_artifact(self, version: Version) -> Artifact {
+        Artifact::new(self.group_id.clone(), self.artifact_id.clone(), version)
+    }
+
+    pub fn path(&self) -> String {
+        format!("{}/{}", self.group_id.path_string(), self.artifact_id)
+    }
+}
+
+impl Display for PartialArtifact {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.group_id, self.artifact_id)
+    }
+}
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug)]
 pub struct Artifact {
@@ -51,7 +78,20 @@ impl Artifact {
         self.version.is_snapshot()
     }
 
-    pub fn parse(input: String) -> Result<Artifact, Error> {
+    pub fn path(&self) -> String {
+        let base = format!("{}/{}", self.group_id.path_string(), self.artifact_id);
+        format!("{}/{}", base, self.version)
+    }
+
+    pub fn file_name(&self) -> String {
+        format!(
+            "{}.{}",
+            self.artifact_id,
+            self.extension.as_deref().unwrap_or("jar")
+        )
+    }
+
+    pub fn parse(input: String) -> Result<Artifact, MavenError> {
         let parts: Vec<_> = input.split(":").collect();
         if parts.len() >= 3 {
             let (ga, rest) = parts.split_at(2);
@@ -77,16 +117,22 @@ impl Artifact {
                     extension: Some(e.to_string()),
                     classifier: Some(Classifier(c.to_string())),
                 }),
-                _ => Err(Error::ParseArtifactError(String::from(
+                _ => Err(MavenError::ParseArtifactError(String::from(
                     "Unable to parse artifact",
                 ))),
             }
         } else {
-            Err(Error::ParseArtifactError(format!(
+            Err(MavenError::ParseArtifactError(format!(
                 "Incorrect number of parts. Expected as least 3, but was {}",
                 parts.len()
             )))
         }
+    }
+}
+
+impl From<Artifact> for PartialArtifact {
+    fn from(value: Artifact) -> Self {
+        PartialArtifact::new(value.group_id, value.artifact_id)
     }
 }
 
@@ -120,29 +166,26 @@ pub struct ResolvedArtifact {
 }
 
 impl ResolvedArtifact {
-    pub fn path(&self, with_version: bool) -> String {
-        let base =
-            self.artifact.group_id.replace(".", "/") + "/" + self.artifact.artifact_id.deref();
-
-        if with_version {
-            format!("{}/{}", base, self.resolved_version)
+    pub fn path(&self) -> String {
+        let base = format!(
+            "{}/{}",
+            self.artifact.group_id.path_string(),
+            self.artifact.artifact_id
+        );
+        let version = if self.artifact.is_snapshot() {
+            &self.artifact.version
         } else {
-            base
-        }
-    }
-
-    pub fn uri(&self, base: Url) -> Result<Url, Error> {
-        let newBase = if (base.path().ends_with("/")) {
-            let mut newBase = base.clone();
-            newBase.set_path(base.path().strip_suffix("/").unwrap());
-            newBase
-        } else {
-            base
+            &self.resolved_version
         };
 
+        format!("{}/{}", base, version)
+    }
+
+    pub fn uri(&self, repository: &Repository) -> Result<Url, MavenError> {
         let mut current_path = format!(
-            "{}/{}-{}",
-            self.path(true),
+            "{}/{}/{}-{}",
+            repository.url.path(),
+            self.path(),
             self.artifact.artifact_id,
             self.resolved_version
         );
@@ -151,10 +194,16 @@ impl ResolvedArtifact {
         }
         current_path +=
             format!(".{}", self.artifact.extension.as_deref().unwrap_or("jar")).as_str();
-        match newBase.join(current_path.as_str()) {
-            Err(p) => Err(Error::UrlError(p)),
+        match repository.url.join(current_path.as_str()) {
+            Err(p) => Err(MavenError::UrlError(p)),
             Ok(u) => Ok(u),
         }
+    }
+}
+
+impl From<ResolvedArtifact> for Artifact {
+    fn from(value: ResolvedArtifact) -> Self {
+        value.artifact.clone().with_version(value.resolved_version)
     }
 }
 
@@ -164,49 +213,49 @@ mod tests {
 
     #[test]
     fn parse_gav() {
-        let result = Artifact::parse(String::from("g:a:v"));
+        let result = Artifact::parse(String::from("g:a:v")).unwrap();
         assert_eq!(
-            result,
-            Ok(Artifact::new(
+            &result,
+            &Artifact::new(
                 GroupId::from("g"),
                 ArtifactId::from("a"),
                 Version::from("v")
-            ))
+            )
         );
-        assert_eq!(result.map(|a| a.to_string()), Ok(String::from("g:a:v")))
+        assert_eq!(&result.to_string(), "g:a:v")
     }
     #[test]
     fn parse_full_gav() {
         let input = "groupId:artifactId:packaging:classifier:version";
-        let result = Artifact::parse(String::from(input));
+        let result = Artifact::parse(String::from(input)).unwrap();
         assert_eq!(
             result,
-            Ok(Artifact {
+            Artifact {
                 group_id: GroupId::from("groupId"),
                 artifact_id: ArtifactId::from("artifactId"),
                 version: Version::from("version"),
                 classifier: Some(Classifier::from("classifier")),
                 extension: Some(String::from("packaging"))
-            })
+            }
         );
-        assert_eq!(result.map(|a| a.to_string()), Ok(String::from(input)))
+        assert_eq!(result.to_string(), String::from(input))
     }
 
     #[test]
     fn parse_missing_classifier() {
         let input = "groupId:artifactId:packaging:version";
-        let result = Artifact::parse(String::from(input));
+        let result = Artifact::parse(String::from(input)).unwrap();
         assert_eq!(
             result,
-            Ok(Artifact {
+            Artifact {
                 group_id: GroupId::from("groupId"),
                 artifact_id: ArtifactId::from("artifactId"),
                 version: Version::from("version"),
                 classifier: None,
                 extension: Some(String::from("packaging"))
-            })
+            }
         );
-        assert_eq!(result.map(|a| a.to_string()), Ok(String::from(input)))
+        assert_eq!(result.to_string(), String::from(input))
     }
 
     #[test]
@@ -221,12 +270,13 @@ mod tests {
             resolved_version: Version::from("1.0.0"),
         };
 
-        let base = Url::parse("https://repo1.maven.org/maven2/").unwrap();
-        let parsed = resolved.uri(base.clone());
+        let base = Repository::maven_central();
+        let parsed = resolved.uri(&base).unwrap();
         let expected = base
             .clone()
-            .join("/com/example/artifact/1.0.0/artifact-1.0.0.jar")
+            .url
+            .join("/maven2/com/example/artifact/1.0.0/artifact-1.0.0.jar")
             .unwrap();
-        assert_eq!(parsed, Ok(expected))
+        assert_eq!(parsed, expected)
     }
 }

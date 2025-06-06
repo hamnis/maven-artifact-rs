@@ -1,14 +1,30 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use std::io;
 use std::ops::Deref;
+use thiserror::Error;
+use url::Url;
 
 mod artifact;
 mod metadata;
+mod resolver;
 
-#[derive(PartialEq, Debug)]
-pub enum Error {
+#[derive(Debug, Error)]
+pub enum MavenError {
+    #[error("Failed to parse artifact {0}.")]
     ParseArtifactError(String),
-    UrlError(url::ParseError),
+    #[error("Failed to parse url")]
+    UrlError(#[from] url::ParseError),
+    #[error("Failed to run io operation")]
+    IoError(#[from] io::Error),
+    #[error("{0} was was not found")]
+    NotFoundError(String),
+    #[error("Failed to resolve")]
+    ResolveError(#[from] reqwest::Error),
+    #[error("Failed to resolve: {0}")]
+    ResolveMessageError(String),
+    #[error("XML decoder error")]
+    XMLDecodeError(#[from] serde_xml_rs::Error),
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -17,6 +33,9 @@ pub struct GroupId(String);
 impl GroupId {
     pub fn into_string(self) -> String {
         self.0
+    }
+    pub fn path_string(&self) -> String {
+        self.0.replace(".", "/")
     }
 }
 
@@ -101,6 +120,20 @@ impl Version {
     pub fn is_snapshot(&self) -> bool {
         self.0.ends_with("-SNAPSHOT")
     }
+
+    pub fn is_meta_version(&self) -> bool {
+        self.is_latest() || self.is_release()
+    }
+
+    pub fn is_latest(&self) -> bool {
+        let lower = self.0.to_lowercase();
+        lower == "latest"
+    }
+
+    pub fn is_release(&self) -> bool {
+        let lower = self.0.to_lowercase();
+        lower == "release"
+    }
 }
 
 impl From<String> for Version {
@@ -172,5 +205,44 @@ impl Deref for Classifier {
 impl Display for Classifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.as_str())
+    }
+}
+
+#[derive(Clone)]
+pub struct Repository {
+    pub url: Url,
+    pub snapshots: bool,
+    pub releases: bool,
+}
+
+impl Repository {
+    pub fn maven_central() -> Repository {
+        Self::releases(Url::parse("https://repo1.maven.org/maven2/").unwrap())
+    }
+
+    fn new(url: Url, snapshots: bool, releases: bool) -> Repository {
+        let new_base = if url.path().ends_with("/") {
+            let mut new_base = url.clone();
+            new_base.set_path(url.path().strip_suffix("/").unwrap());
+            new_base
+        } else {
+            url
+        };
+        Repository {
+            url: new_base,
+            snapshots,
+            releases,
+        }
+    }
+
+    pub fn both(url: Url) -> Repository {
+        Self::new(url, true, true)
+    }
+
+    pub fn releases(url: Url) -> Repository {
+        Self::new(url, false, true)
+    }
+    pub fn snapshots(url: Url) -> Repository {
+        Self::new(url, true, false)
     }
 }
