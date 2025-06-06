@@ -2,6 +2,10 @@ use crate::*;
 use std::fmt::{Display, Formatter};
 use url::Url;
 
+#[derive(Debug, Clone, Error)]
+#[error("{0}")]
+pub struct ParseArtifactError(String);
+
 pub struct PartialArtifact {
     pub group_id: GroupId,
     pub artifact_id: ArtifactId,
@@ -91,7 +95,7 @@ impl Artifact {
         )
     }
 
-    pub fn parse(input: String) -> Result<Artifact, MavenError> {
+    pub fn parse(input: String) -> Result<Artifact, ParseArtifactError> {
         let parts: Vec<_> = input.split(":").collect();
         if parts.len() >= 3 {
             let (ga, rest) = parts.split_at(2);
@@ -117,12 +121,10 @@ impl Artifact {
                     extension: Some(e.to_string()),
                     classifier: Some(Classifier(c.to_string())),
                 }),
-                _ => Err(MavenError::ParseArtifactError(String::from(
-                    "Unable to parse artifact",
-                ))),
+                _ => Err(ParseArtifactError(String::from("Unable to parse artifact"))),
             }
         } else {
-            Err(MavenError::ParseArtifactError(format!(
+            Err(ParseArtifactError(format!(
                 "Incorrect number of parts. Expected as least 3, but was {}",
                 parts.len()
             )))
@@ -181,7 +183,7 @@ impl ResolvedArtifact {
         format!("{}/{}", base, version)
     }
 
-    pub fn uri(&self, repository: &Repository) -> Result<Url, MavenError> {
+    pub fn uri(&self, repository: &Repository) -> Result<Url, url::ParseError> {
         let mut current_path = format!(
             "{}/{}/{}-{}",
             repository.url.path(),
@@ -194,10 +196,7 @@ impl ResolvedArtifact {
         }
         current_path +=
             format!(".{}", self.artifact.extension.as_deref().unwrap_or("jar")).as_str();
-        match repository.url.join(current_path.as_str()) {
-            Err(p) => Err(MavenError::UrlError(p)),
-            Ok(u) => Ok(u),
-        }
+        repository.url.join(current_path.as_str())
     }
 }
 

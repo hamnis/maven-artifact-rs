@@ -4,8 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-serde-xml-rs = "0.8.0"
+serde-xml-rs = "0.8.1"
 url = "2.5.4"
 serde = { version = "1.0.219", features = ["derive"] }
-reqwest = "0.12.16"
+reqwest = { version = "0.12.19", default-features = false, optional = true }
+bytes = "1"
 thiserror = "2"
+
+
+[features]
+default = ["reqwest"]
+reqwest = ["reqwest/deflate", "reqwest/rustls-tls", "reqwest/h2"]

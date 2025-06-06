@@ -1,30 +1,20 @@
+use crate::resolver::ResolveError;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
-use std::io;
 use std::ops::Deref;
 use thiserror::Error;
 use url::Url;
 
 mod artifact;
 mod metadata;
+#[cfg(feature = "reqwest")]
+mod reqwest_async;
 mod resolver;
 
 #[derive(Debug, Error)]
 pub enum MavenError {
-    #[error("Failed to parse artifact {0}.")]
-    ParseArtifactError(String),
-    #[error("Failed to parse url")]
-    UrlError(#[from] url::ParseError),
-    #[error("Failed to run io operation")]
-    IoError(#[from] io::Error),
-    #[error("{0} was was not found")]
-    NotFoundError(String),
-    #[error("Failed to resolve")]
-    ResolveError(#[from] reqwest::Error),
-    #[error("Failed to resolve: {0}")]
-    ResolveMessageError(String),
-    #[error("XML decoder error")]
-    XMLDecodeError(#[from] serde_xml_rs::Error),
+    #[error("Http error")]
+    ResolveError(#[from] ResolveError),
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
