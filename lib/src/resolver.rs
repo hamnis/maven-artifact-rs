@@ -1,10 +1,9 @@
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
 use crate::{Repository, Version};
-use bytes::Bytes;
 use reqwest::Client;
 use std::fs::File;
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use url::Url;
@@ -44,9 +43,11 @@ impl Resolver<'_> {
         self.metadata0(artifact.path()).await
     }
 
-    async fn get(&self, url: Url) -> Result<Cursor<Bytes>, ResolveError> {
+    async fn metadata0(&self, path: String) -> Result<VersionedMetadata, ResolveError> {
+        let metadata_path = format!("{}/{}/maven-metadata.xml", self.repository.url.path(), path);
+        let url = self.repository.url.join(&metadata_path)?;
         let response = self.client.get(url.clone()).send().await?;
-        if response.status().is_success() {
+        let bytes = (if response.status().is_success() {
             let bytes = response.bytes().await?;
             Ok(Cursor::new(bytes))
         } else {
@@ -54,12 +55,7 @@ impl Resolver<'_> {
                 url: url.clone(),
                 status: response.status().as_u16(),
             })
-        }
-    }
-
-    async fn metadata0(&self, path: String) -> Result<VersionedMetadata, ResolveError> {
-        let metadata_path = format!("{}/{}/maven-metadata.xml", self.repository.url.path(), path);
-        let bytes = self.get(self.repository.url.join(&metadata_path)?).await?;
+        })?;
 
         let versioned: VersionedMetadata = serde_xml_rs::from_reader(bytes)?;
         Ok(versioned)
@@ -124,11 +120,15 @@ impl Resolver<'_> {
         artifact: ResolvedArtifact,
         dir: &Path,
     ) -> Result<PathBuf, ResolveError> {
-        let mut cursor = self.get(artifact.uri(self.repository)?).await?;
+        let url = artifact.uri(self.repository)?;
+        let mut response = self.client.get(url.clone()).send().await?;
         let path = dir.join(artifact.artifact.file_name());
 
         let mut file = File::create(&path)?;
-        std::io::copy(&mut cursor, &mut file)?;
+        // Stream the response body and write it to the file chunk by chunk
+        while let Some(chunk) = response.chunk().await? {
+            file.write_all(&chunk)?;
+        }
 
         Ok(path)
     }
