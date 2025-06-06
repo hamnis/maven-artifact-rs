@@ -1,7 +1,7 @@
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
 use crate::{Repository, Version};
-use reqwest::Client;
+use reqwest::{Client, Response};
 use std::fs::File;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
@@ -124,12 +124,39 @@ impl Resolver<'_> {
         let mut response = self.client.get(url.clone()).send().await?;
         let path = dir.join(artifact.artifact.file_name());
 
-        let mut file = File::create(&path)?;
+        #[cfg(feature = "progressbar")]
+        {
+            use indicatif::{ProgressBar, ProgressStyle};
+
+            let pb = ProgressBar::no_length();
+            match response.content_length() {
+                Some(length) => pb.set_length(length),
+                None => (),
+            };
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.green} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+                )
+                .unwrap()
+                .progress_chars("#>-"),
+            );
+            let mut file = pb.wrap_write(File::create(&path)?);
+            Self::write(&mut response, &mut file).await?;
+        }
+        #[cfg(not(feature = "progressbar"))]
+        {
+            let mut file = File::create(&path)?;
+            Self::write(&mut response, &mut file).await?;
+        }
+
+        Ok(path)
+    }
+
+    async fn write<W: Write>(response: &mut Response, file: &mut W) -> Result<(), ResolveError> {
         // Stream the response body and write it to the file chunk by chunk
         while let Some(chunk) = response.chunk().await? {
             file.write_all(&chunk)?;
         }
-
-        Ok(path)
+        Ok(())
     }
 }

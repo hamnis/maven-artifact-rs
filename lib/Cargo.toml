@@ -11,6 +11,8 @@ serde-xml-rs.workspace = true
 url.workspace = true
 serde.workspace = true
 reqwest.workspace = true
-bytes.workspace = true
 thiserror.workspace = true
+indicatif = { workspace = true, optional = true }
 
+[features]
+progressbar = ["indicatif"]
