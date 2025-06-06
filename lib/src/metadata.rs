@@ -71,7 +71,7 @@ mod test {
     #[test]
     fn parse_more_complicated() {
         let input = std::fs::read_to_string(
-            "test-files/metadata/org/openapitools/openapi-generator-cli/maven-metadata.xml",
+            "../test-files/metadata/org/openapitools/openapi-generator-cli/maven-metadata.xml",
         )
         .unwrap();
         let metadata: VersionedMetadata = from_str(&input).unwrap();

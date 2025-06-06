@@ -1,9 +1,18 @@
-[package]
-name = "maven-artifact-rs"
-version = "0.1.0"
+[workspace.package]
+#name = "maven-artifact-rs"
+authors = ["Erlend Hamnaberg <erlend@hamnaberg.net>"]
 edition = "2024"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/hamnis/maven-artifact-rs"
+version = "0.1.0"
 
-[dependencies]
+[workspace]
+members = ["lib", "cli"]
+resolver = "2"
+
+[workspace.dependencies]
+clap = { version = "4.5.39", features = ["derive"] }
 serde-xml-rs = "0.8.1"
 url = "2.5.4"
 serde = { version = "1", features = ["derive"] }
@@ -11,5 +20,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 bytes = "1"
 thiserror = "2"
 futures = "0.3"
-tokio = "1.45"
+tokio = { version = "1.45", features = ["rt", "macros"] }
 tempfile = "3"
+anyhow = "1"
+base64 = "0.22.1"

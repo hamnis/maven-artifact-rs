@@ -1,19 +1,12 @@
-use crate::resolver::ResolveError;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use thiserror::Error;
 use url::Url;
 
-mod artifact;
+pub mod artifact;
 mod metadata;
-mod resolver;
-
-#[derive(Debug, Error)]
-pub enum MavenError {
-    #[error("Http error")]
-    ResolveError(#[from] ResolveError),
-}
+pub mod resolver;
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct GroupId(String);

@@ -2,25 +2,26 @@ use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArt
 use crate::metadata::VersionedMetadata;
 use crate::{Repository, Version};
 use bytes::Bytes;
-use futures::{Stream, StreamExt};
 use reqwest::Client;
+use std::fs::File;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use url::Url;
 
 #[derive(Debug, Error)]
 pub enum ResolveError {
-    #[error("Failed to parse url")]
+    #[error("Failed to parse url {0}")]
     UrlError(#[from] url::ParseError),
-    #[error("Parse artifact")]
+    #[error("Parse artifact {0}")]
     Parse(#[from] ParseArtifactError),
-    #[error("Error using reqwest")]
+    #[error("Error using reqwest {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("XML decoder error")]
+    #[error("XML decoder error: {0}")]
     XMLDecodeError(#[from] serde_xml_rs::Error),
-    #[error("IO operation failed")]
+    #[error("IO operation failed, {0}")]
     IO(#[from] std::io::Error),
-    #[error("Http error")]
+    #[error("Http error, url={url}, status={status}")]
     GenericHttpError { url: Url, status: u16 },
     #[error("Resolve error {0}")]
     Message(String),
@@ -43,14 +44,11 @@ impl Resolver<'_> {
         self.metadata0(artifact.path()).await
     }
 
-    async fn get(
-        &self,
-        url: Url,
-    ) -> Result<impl Stream<Item = reqwest::Result<Bytes>>, ResolveError> {
+    async fn get(&self, url: Url) -> Result<Cursor<Bytes>, ResolveError> {
         let response = self.client.get(url.clone()).send().await?;
         if response.status().is_success() {
-            let bytes = response.bytes_stream();
-            Ok(bytes)
+            let bytes = response.bytes().await?;
+            Ok(Cursor::new(bytes))
         } else {
             Err(ResolveError::GenericHttpError {
                 url: url.clone(),
@@ -60,15 +58,10 @@ impl Resolver<'_> {
     }
 
     async fn metadata0(&self, path: String) -> Result<VersionedMetadata, ResolveError> {
-        let metadata_path = format!("{}/metadata-xml", path);
-        let mut stream = self.get(self.repository.url.join(&metadata_path)?).await?;
-        let mut tmp_file = tokio::fs::File::from(tempfile::tempfile()?);
-        while let Some(item) = stream.next().await {
-            tokio::io::copy(&mut item?.as_ref(), &mut tmp_file).await?;
-        }
-        tmp_file.sync_all().await?;
-        let std = tmp_file.into_std().await;
-        let versioned: VersionedMetadata = serde_xml_rs::from_reader(std)?;
+        let metadata_path = format!("{}/{}/maven-metadata.xml", self.repository.url.path(), path);
+        let bytes = self.get(self.repository.url.join(&metadata_path)?).await?;
+
+        let versioned: VersionedMetadata = serde_xml_rs::from_reader(bytes)?;
         Ok(versioned)
     }
 
@@ -131,13 +124,11 @@ impl Resolver<'_> {
         artifact: ResolvedArtifact,
         dir: &Path,
     ) -> Result<PathBuf, ResolveError> {
-        let mut stream = self.get(artifact.uri(self.repository)?).await?;
+        let mut cursor = self.get(artifact.uri(self.repository)?).await?;
         let path = dir.join(artifact.artifact.file_name());
-        let mut tmp_file = tokio::fs::File::from(tempfile::tempfile()?);
-        while let Some(item) = stream.next().await {
-            tokio::io::copy(&mut item?.as_ref(), &mut tmp_file).await?;
-        }
-        tmp_file.sync_all().await?;
+
+        let mut file = File::create(&path)?;
+        std::io::copy(&mut cursor, &mut file)?;
 
         Ok(path)
     }

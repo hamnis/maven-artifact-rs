@@ -6,6 +6,7 @@ use url::Url;
 #[error("{0}")]
 pub struct ParseArtifactError(String);
 
+#[derive(Clone, Debug)]
 pub struct PartialArtifact {
     pub group_id: GroupId,
     pub artifact_id: ArtifactId,
@@ -25,6 +26,21 @@ impl PartialArtifact {
 
     pub fn path(&self) -> String {
         format!("{}/{}", self.group_id.path_string(), self.artifact_id)
+    }
+
+    pub fn parse(input: &str) -> Result<PartialArtifact, ParseArtifactError> {
+        let parts: Vec<_> = input.split(":").collect();
+        if parts.len() == 2 {
+            Ok(PartialArtifact {
+                group_id: GroupId::from(parts[0]),
+                artifact_id: ArtifactId::from(parts[1]),
+            })
+        } else {
+            Err(ParseArtifactError(format!(
+                "There are not enough or too many parts {}",
+                input
+            )))
+        }
     }
 }
 
@@ -95,7 +111,7 @@ impl Artifact {
         )
     }
 
-    pub fn parse(input: String) -> Result<Artifact, ParseArtifactError> {
+    pub fn parse(input: &str) -> Result<Artifact, ParseArtifactError> {
         let parts: Vec<_> = input.split(":").collect();
         if parts.len() >= 3 {
             let (ga, rest) = parts.split_at(2);
@@ -212,7 +228,7 @@ mod tests {
 
     #[test]
     fn parse_gav() {
-        let result = Artifact::parse(String::from("g:a:v")).unwrap();
+        let result = Artifact::parse("g:a:v").unwrap();
         assert_eq!(
             &result,
             &Artifact::new(
@@ -226,7 +242,7 @@ mod tests {
     #[test]
     fn parse_full_gav() {
         let input = "groupId:artifactId:packaging:classifier:version";
-        let result = Artifact::parse(String::from(input)).unwrap();
+        let result = Artifact::parse(input).unwrap();
         assert_eq!(
             result,
             Artifact {
@@ -243,7 +259,7 @@ mod tests {
     #[test]
     fn parse_missing_classifier() {
         let input = "groupId:artifactId:packaging:version";
-        let result = Artifact::parse(String::from(input)).unwrap();
+        let result = Artifact::parse(input).unwrap();
         assert_eq!(
             result,
             Artifact {

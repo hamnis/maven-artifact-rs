@@ -1,0 +1,19 @@
+[package]
+name = "maven-artifact"
+description = "Maven artifact library"
+repository.workspace = true
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde-xml-rs.workspace = true
+url.workspace = true
+serde.workspace = true
+reqwest.workspace = true
+bytes.workspace = true
+thiserror.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tempfile.workspace = true
+
