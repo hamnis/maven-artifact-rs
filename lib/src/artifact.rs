@@ -37,7 +37,7 @@ impl PartialArtifact {
             })
         } else {
             Err(ParseArtifactError(format!(
-                "There are not enough or too many parts {}",
+                "There are not enough or too many parts. Expected <groupId>:<artifactId> {}",
                 input
             )))
         }
