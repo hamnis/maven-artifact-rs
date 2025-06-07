@@ -51,15 +51,15 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Some(Commands::Versions { coordinates }) => {
-            let result = make_client()?;
-            let resolver = Resolver::new(&result, &repo);
-            let meta = resolver.metadata(coordinates).await;
+            let client = make_client()?;
+            let resolver = Resolver::new(&client, &repo);
+            let meta = resolver.metadata(coordinates).await?;
             println!("{:?}", meta);
             Ok(())
         }
         Some(Commands::Resolve { coordinates, path }) => {
-            let result = make_client()?;
-            let resolver = Resolver::new(&result, &repo);
+            let client = make_client()?;
+            let resolver = Resolver::new(&client, &repo);
             let file = resolver.download(coordinates, path.as_path()).await?;
             println!("{}", file.as_path().display());
             Ok(())
@@ -70,13 +70,19 @@ async fn main() -> anyhow::Result<()> {
 
 fn make_client() -> anyhow::Result<Client> {
     let client = ClientBuilder::new().user_agent(APP_USER_AGENT);
-    let auth = get_auth();
+    let auth = Authorization::from_env();
     let c = match auth {
         None => client,
-        Some((username, password)) => client.default_headers({
+        Some(Authorization::Basic { username, password }) => client.default_headers({
             let mut m = HeaderMap::new();
             let basic = BASE64_STANDARD.encode(format!("{}:{}", username, password));
             let value = HeaderValue::from_str(&format!("Basic {}", basic))?;
+            m.insert(AUTHORIZATION, value);
+            m
+        }),
+        Some(Authorization::Token { value }) => client.default_headers({
+            let mut m = HeaderMap::new();
+            let value = HeaderValue::from_str(&format!("Bearer {}", value))?;
             m.insert(AUTHORIZATION, value);
             m
         }),
@@ -86,8 +92,24 @@ fn make_client() -> anyhow::Result<Client> {
     Ok(result)
 }
 
-fn get_auth() -> Option<(String, String)> {
-    let username = std::env::var("MAVEN_USERNAME").ok()?;
-    let password = std::env::var("MAVEN_PASSWORD").ok()?;
-    Some((username, password))
+enum Authorization {
+    Basic { username: String, password: String },
+    Token { value: String },
+}
+
+impl Authorization {
+    fn from_env() -> Option<Authorization> {
+        Self::basic().or(Self::token())
+    }
+
+    fn basic() -> Option<Authorization> {
+        let username = std::env::var("MAVEN_USERNAME").ok()?;
+        let password = std::env::var("MAVEN_PASSWORD").ok()?;
+        Some(Authorization::Basic { username, password })
+    }
+
+    fn token() -> Option<Authorization> {
+        let token = std::env::var("MAVEN_TOKEN").ok()?;
+        Some(Authorization::Token { value: token })
+    }
 }
