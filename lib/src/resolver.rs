@@ -68,7 +68,7 @@ impl Resolver<'_> {
                 let snapshot = versioning.snapshot.unwrap();
                 let meta_version =
                     Version::from(format!("{}-{}", snapshot.timestamp, snapshot.buildNumber));
-                let versions = versioning.snapshotVersions.unwrap_or(vec![]);
+                let versions = versioning.snapshot_versions.unwrap_or(vec![]);
                 let found = versions.iter().find_map(move |x| {
                     if x.value.ends_with(meta_version.as_ref()) {
                         Some(x.value.clone())

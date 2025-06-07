@@ -18,23 +18,21 @@ pub enum MetadataError {
     Unexpected(String),
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct VersionedMetadata {
-    pub groupId: GroupId,
-    pub artifactId: ArtifactId,
+    pub group_id: GroupId,
+    pub artifact_id: ArtifactId,
     pub versioning: Versioning,
 }
 
-#[allow(non_snake_case)]
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct Versioning {
     pub latest: Option<Version>,
     pub release: Option<Version>,
     pub versions: Option<Vec<Version>>,
-    pub lastUpdated: Option<String>,
+    pub last_updated: Option<String>,
     pub snapshot: Option<Snapshot>,
-    pub snapshotVersions: Option<Vec<SnapshotVersion>>,
+    pub snapshot_versions: Option<Vec<SnapshotVersion>>,
 }
 
 #[allow(non_snake_case)]
@@ -86,8 +84,8 @@ impl VersionedMetadata {
                 XmlEvent::EndDocument => match (&group_id, &artifact_id, &versioning) {
                     (Some(g), Some(a), Some(v)) => {
                         break Ok(VersionedMetadata {
-                            groupId: g.clone(),
-                            artifactId: a.clone(),
+                            group_id: g.clone(),
+                            artifact_id: a.clone(),
                             versioning: v.clone(),
                         });
                     }
@@ -95,7 +93,7 @@ impl VersionedMetadata {
                         break Err(Unexpected(String::from("Missing groupId")));
                     }
                     (_, None, _) => {
-                        break Err(Unexpected(String::from("Missing artifactId")));
+                        break Err(Unexpected(String::from("Missing artifact_id")));
                     }
                     (_, _, None) => {
                         break Err(Unexpected(String::from("Missing versioning")));
@@ -144,7 +142,7 @@ impl VersionedMetadata {
                 }
                 XmlEvent::StartElement { name, .. } if name.local_name == "lastUpdated" => {
                     let updated = Self::string_element(parser)?;
-                    parsed.lastUpdated = Some(updated);
+                    parsed.last_updated = Some(updated);
                 }
                 XmlEvent::EndElement { name, .. } if name.local_name == "versions" => {
                     parsed.versions = Some(versions.clone());
@@ -158,7 +156,7 @@ impl VersionedMetadata {
                     snapshots.push(version);
                 }
                 XmlEvent::EndElement { name, .. } if name.local_name == "snapshotVersions" => {
-                    parsed.snapshotVersions = Some(snapshots.clone());
+                    parsed.snapshot_versions = Some(snapshots.clone());
                 }
                 _ => continue,
             }
@@ -263,15 +261,15 @@ mod test {
         assert_eq!(
             metadata,
             VersionedMetadata {
-                groupId: GroupId::from("com.example"),
-                artifactId: ArtifactId::from("example-cli"),
+                group_id: GroupId::from("com.example"),
+                artifact_id: ArtifactId::from("example-cli"),
                 versioning: Versioning {
                     latest: Some(Version::from("3.0.0")),
                     release: Some(Version::from("3.0.0")),
                     versions: Some(vec![Version::from("3.0.0")]),
-                    lastUpdated: Some(String::from("20250427133131")),
+                    last_updated: Some(String::from("20250427133131")),
                     snapshot: None,
-                    snapshotVersions: None
+                    snapshot_versions: None
                 }
             }
         )
@@ -284,9 +282,9 @@ mod test {
         )
         .unwrap();
         let metadata: VersionedMetadata = VersionedMetadata::from_str(&input).unwrap();
-        assert_eq!(metadata.groupId, GroupId::from("org.openapitools"));
+        assert_eq!(metadata.group_id, GroupId::from("org.openapitools"));
         let versioning = metadata.versioning;
-        assert!(versioning.snapshotVersions.is_none());
+        assert!(versioning.snapshot_versions.is_none());
         let versions = versioning.versions.unwrap();
         assert_eq!(versions.first().unwrap(), &Version::from("3.0.0"));
         assert_eq!(versions.last(), versioning.release.as_ref());
@@ -298,10 +296,10 @@ mod test {
             std::fs::read_to_string("test-files/metadata/org/pac4j/pac4j-http/maven-metadata.xml")
                 .unwrap();
         let metadata: VersionedMetadata = VersionedMetadata::from_str(&input).unwrap();
-        assert_eq!(metadata.groupId, GroupId::from("org.pac4j"));
-        assert_eq!(metadata.artifactId, ArtifactId::from("pac4j-http"));
+        assert_eq!(metadata.group_id, GroupId::from("org.pac4j"));
+        assert_eq!(metadata.artifact_id, ArtifactId::from("pac4j-http"));
         let versioning = metadata.versioning;
-        assert!(versioning.snapshotVersions.is_none());
+        assert!(versioning.snapshot_versions.is_none());
         let versions = versioning.versions.unwrap();
         assert_eq!(versions.first().unwrap(), &Version::from("6.1.4-SNAPSHOT"));
     }
@@ -323,15 +321,15 @@ mod test {
         }
 
         let expected = VersionedMetadata {
-            groupId: GroupId::from("org.pac4j"),
-            artifactId: ArtifactId::from("pac4j-http"),
+            group_id: GroupId::from("org.pac4j"),
+            artifact_id: ArtifactId::from("pac4j-http"),
             versioning: Versioning {
-                lastUpdated: Some(String::from("20250607033109")),
+                last_updated: Some(String::from("20250607033109")),
                 snapshot: Some(Snapshot {
                     timestamp: String::from("20250607.033109"),
                     buildNumber: 15,
                 }),
-                snapshotVersions: Some(vec![
+                snapshot_versions: Some(vec![
                     make("jar", None),
                     make("pom", None),
                     make("jar", Some("javadoc")),

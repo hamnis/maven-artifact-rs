@@ -37,7 +37,7 @@ impl PartialArtifact {
             })
         } else {
             Err(ParseArtifactError(format!(
-                "There are not enough or too many parts. Expected <groupId>:<artifactId> {}",
+                "There are not enough or too many parts. Expected <groupId>:<artifact_id> {}",
                 input
             )))
         }
@@ -242,13 +242,13 @@ mod tests {
     }
     #[test]
     fn parse_full_gav() {
-        let input = "groupId:artifactId:packaging:classifier:version";
+        let input = "groupId:artifact_id:packaging:classifier:version";
         let result = Artifact::parse(input).unwrap();
         assert_eq!(
             result,
             Artifact {
                 group_id: GroupId::from("groupId"),
-                artifact_id: ArtifactId::from("artifactId"),
+                artifact_id: ArtifactId::from("artifact_id"),
                 version: Version::from("version"),
                 classifier: Some(Classifier::from("classifier")),
                 extension: Some(String::from("packaging"))
@@ -259,13 +259,13 @@ mod tests {
 
     #[test]
     fn parse_missing_classifier() {
-        let input = "groupId:artifactId:packaging:version";
+        let input = "groupId:artifact_id:packaging:version";
         let result = Artifact::parse(input).unwrap();
         assert_eq!(
             result,
             Artifact {
                 group_id: GroupId::from("groupId"),
-                artifact_id: ArtifactId::from("artifactId"),
+                artifact_id: ArtifactId::from("artifact_id"),
                 version: Version::from("version"),
                 classifier: None,
                 extension: Some(String::from("packaging"))
