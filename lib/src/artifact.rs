@@ -105,8 +105,9 @@ impl Artifact {
 
     pub fn file_name(&self) -> String {
         format!(
-            "{}.{}",
+            "{}-{}.{}",
             self.artifact_id,
+            self.version,
             self.extension.as_deref().unwrap_or("jar")
         )
     }
