@@ -1,6 +1,6 @@
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
-use crate::{Repository, Version};
+use crate::{Repository, Version, metadata};
 use reqwest::{Client, Response};
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Write};
@@ -17,7 +17,7 @@ pub enum ResolveError {
     #[error("Error using reqwest {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("XML decoder error: {0}")]
-    XMLDecodeError(#[from] serde_xml_rs::Error),
+    XMLDecodeError(#[from] metadata::MetadataError),
     #[error("IO operation failed, {0}")]
     IO(#[from] std::io::Error),
     #[error("Http error, url={url}, status={status}")]
@@ -50,7 +50,7 @@ impl Resolver<'_> {
         if response.status().is_success() {
             let bytes = response.bytes().await?;
             let c = Cursor::new(bytes);
-            let versioned: VersionedMetadata = serde_xml_rs::from_reader(c)?;
+            let versioned: VersionedMetadata = VersionedMetadata::parse(c)?;
             Ok(versioned)
         } else {
             Err(ResolveError::GenericHttpError {
@@ -64,7 +64,7 @@ impl Resolver<'_> {
         if artifact.is_snapshot() {
             if self.repository.snapshots {
                 let meta = self.metadata0(artifact.path()).await?;
-                let versioning = meta.versioning.unwrap();
+                let versioning = meta.versioning;
                 let snapshot = versioning.snapshot.unwrap();
                 let meta_version =
                     Version::from(format!("{}-{}", snapshot.timestamp, snapshot.buildNumber));
@@ -81,7 +81,7 @@ impl Resolver<'_> {
             }
         } else if artifact.version.is_meta_version() {
             let meta = self.metadata(artifact.clone().into()).await?;
-            let versioning = meta.versioning.unwrap();
+            let versioning = meta.versioning;
             let maybe_resolved = if artifact.version.is_release() {
                 versioning.release
             } else {

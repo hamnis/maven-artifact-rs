@@ -12,12 +12,11 @@ resolver = "2"
 
 [workspace.dependencies]
 clap = { version = "4.5.39", features = ["derive"] }
-serde-xml-rs = "0.8.1"
 url = "2.5.4"
-serde = { version = "1", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "deflate", "gzip", "http2"] }
 thiserror = "2"
 tokio = { version = "1.45", features = ["rt", "macros"] }
 anyhow = "1"
 base64 = "0.22.1"
 indicatif = "0.17.11"
+xml-rs = "0.8.26"

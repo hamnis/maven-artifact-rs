@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use thiserror::Error;
@@ -8,7 +7,7 @@ pub mod artifact;
 mod metadata;
 pub mod resolver;
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
 pub struct GroupId(String);
 
 impl GroupId {
@@ -52,7 +51,7 @@ impl Display for GroupId {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
 pub struct ArtifactId(String);
 impl ArtifactId {
     pub fn into_string(self) -> String {
@@ -92,7 +91,7 @@ impl Display for ArtifactId {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
 pub struct Version(String);
 impl Version {
     pub fn into_string(self) -> String {
@@ -149,7 +148,7 @@ impl Display for Version {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
 pub struct Classifier(String);
 impl Classifier {
     pub fn into_string(self) -> String {
@@ -199,6 +198,11 @@ pub struct Repository {
 impl Repository {
     pub fn maven_central() -> Repository {
         Self::releases(Url::parse("https://repo1.maven.org/maven2/").unwrap())
+    }
+    pub fn maven_central_snapshots() -> Repository {
+        Self::snapshots(
+            Url::parse("https://central.sonatype.com/repository/maven-snapshots/").unwrap(),
+        )
     }
 
     fn new(url: Url, snapshots: bool, releases: bool) -> Repository {

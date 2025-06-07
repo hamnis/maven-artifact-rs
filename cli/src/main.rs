@@ -12,6 +12,9 @@ use std::path::PathBuf;
 use tokio;
 use url::Url;
 
+// Name your user agent after your app?
+static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
 #[derive(Parser)]
 #[command(version, about, long_about, arg_required_else_help = true)]
 struct Cli {
@@ -38,6 +41,8 @@ enum Commands {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let repo = match std::env::var("MAVEN_REPOSITORY").ok() {
+        Some(s) if &s == "central" => Ok(Repository::maven_central()),
+        Some(s) if &s == "central-snapshots" => Ok(Repository::maven_central_snapshots()),
         Some(r) => Url::parse(&r)
             .context(format!("Unable to parse {}", r))
             .map(Repository::both),
@@ -64,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn make_client() -> anyhow::Result<Client> {
-    let client = ClientBuilder::new();
+    let client = ClientBuilder::new().user_agent(APP_USER_AGENT);
     let auth = get_auth();
     let c = match auth {
         None => client,
