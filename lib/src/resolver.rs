@@ -3,7 +3,7 @@ use crate::metadata::VersionedMetadata;
 use crate::{Repository, Version};
 use reqwest::{Client, Response};
 use std::fs::File;
-use std::io::{Cursor, Write};
+use std::io::{BufWriter, Cursor, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use url::Url;
@@ -47,18 +47,17 @@ impl Resolver<'_> {
         let metadata_path = format!("{}/{}/maven-metadata.xml", self.repository.url.path(), path);
         let url = self.repository.url.join(&metadata_path)?;
         let response = self.client.get(url.clone()).send().await?;
-        let bytes = (if response.status().is_success() {
+        if response.status().is_success() {
             let bytes = response.bytes().await?;
-            Ok(Cursor::new(bytes))
+            let c = Cursor::new(bytes);
+            let versioned: VersionedMetadata = serde_xml_rs::from_reader(c)?;
+            Ok(versioned)
         } else {
             Err(ResolveError::GenericHttpError {
                 url: url.clone(),
                 status: response.status().as_u16(),
             })
-        })?;
-
-        let versioned: VersionedMetadata = serde_xml_rs::from_reader(bytes)?;
-        Ok(versioned)
+        }
     }
 
     pub async fn download(&self, artifact: Artifact, path: &Path) -> Result<PathBuf, ResolveError> {
@@ -140,12 +139,12 @@ impl Resolver<'_> {
                 .unwrap()
                 .progress_chars("#>-"),
             );
-            let mut file = pb.wrap_write(File::create(&path)?);
+            let mut file = BufWriter::new(pb.wrap_write(File::create(&path)?));
             Self::write(&mut response, &mut file).await?;
         }
         #[cfg(not(feature = "progressbar"))]
         {
-            let mut file = File::create(&path)?;
+            let mut file = BufWriter::new(File::create(&path)?);
             Self::write(&mut response, &mut file).await?;
         }
 
