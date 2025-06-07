@@ -185,16 +185,16 @@ pub struct ResolvedArtifact {
 }
 
 impl ResolvedArtifact {
-    pub fn path(&self) -> String {
+    fn path(&self) -> String {
         let base = format!(
             "{}/{}",
             self.artifact.group_id.path_string(),
             self.artifact.artifact_id
         );
         let version = if self.artifact.is_snapshot() {
-            &self.artifact.version
+            format!("{}", &self.artifact.version)
         } else {
-            &self.resolved_version
+            format!("{}", self.resolved_version)
         };
 
         format!("{}/{}", base, version)

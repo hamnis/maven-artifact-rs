@@ -68,10 +68,18 @@ impl Resolver<'_> {
                 let snapshot = versioning.snapshot.unwrap();
                 let meta_version =
                     Version::from(format!("{}-{}", snapshot.timestamp, snapshot.buildNumber));
-                //let versions = versioning.snapshotVersions.unwrap_or(vec![]);
+                let versions = versioning.snapshotVersions.unwrap_or(vec![]);
+                let found = versions.iter().find_map(move |x| {
+                    if x.value.ends_with(meta_version.as_ref()) {
+                        Some(x.value.clone())
+                    } else {
+                        None
+                    }
+                });
+
                 let resolved = ResolvedArtifact {
                     artifact: artifact.clone(),
-                    resolved_version: meta_version,
+                    resolved_version: found.unwrap_or(artifact.version.clone()),
                 };
                 self.download0(resolved, path).await
             } else {
@@ -120,6 +128,7 @@ impl Resolver<'_> {
         dir: &Path,
     ) -> Result<PathBuf, ResolveError> {
         let url = artifact.uri(self.repository)?;
+        eprintln!("{}", url);
         let mut response = self.client.get(url.clone()).send().await?;
         let path = dir.join(artifact.artifact.file_name());
 
