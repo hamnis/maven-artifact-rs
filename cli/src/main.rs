@@ -109,9 +109,15 @@ async fn main() -> anyhow::Result<()> {
                         };
                         let mut reversed = ver.clone();
                         reversed.reverse();
-                        reversed.iter().take(size).for_each(|version| {
-                            println!("{version}");
-                        })
+                        print!(
+                            "{}",
+                            reversed
+                                .iter()
+                                .take(size)
+                                .fold(String::new(), |acc, version| {
+                                    acc + &version.to_string() + "\n"
+                                })
+                        )
                     }
                     None => {
                         println!("{:?}", meta);
