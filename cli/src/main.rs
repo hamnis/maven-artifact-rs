@@ -115,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
                                 .iter()
                                 .take(size)
                                 .fold(String::new(), |acc, version| {
-                                    acc + &version.to_string() + "\n"
+                                    acc + version.as_ref() + "\n"
                                 })
                         )
                     }
