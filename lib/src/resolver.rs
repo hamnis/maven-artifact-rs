@@ -61,6 +61,10 @@ impl Resolver<'_> {
     }
 
     pub async fn download(&self, artifact: Artifact, path: &Path) -> Result<PathBuf, ResolveError> {
+        let version = artifact
+            .version
+            .clone()
+            .ok_or(ResolveError::Message(String::from("No version set")))?;
         if artifact.is_snapshot() {
             if self.repository.snapshots {
                 let meta = self.metadata0(artifact.path()).await?;
@@ -79,7 +83,7 @@ impl Resolver<'_> {
 
                 let resolved = ResolvedArtifact {
                     artifact: artifact.clone(),
-                    resolved_version: found.unwrap_or(artifact.version.clone()),
+                    resolved_version: found.or(artifact.version.clone()).unwrap(),
                 };
                 self.download0(resolved, path).await
             } else {
@@ -87,10 +91,10 @@ impl Resolver<'_> {
                     "You may not resolve snapshots from a non-snapshot repository",
                 )))
             }
-        } else if artifact.version.is_meta_version() {
+        } else if version.is_meta_version() {
             let meta = self.metadata(artifact.clone().into()).await?;
             let versioning = meta.versioning;
-            let maybe_resolved = if artifact.version.is_release() {
+            let maybe_resolved = if version.is_release() {
                 versioning.release
             } else {
                 versioning.latest
@@ -115,7 +119,7 @@ impl Resolver<'_> {
             self.download0(
                 ResolvedArtifact {
                     artifact: artifact.clone(),
-                    resolved_version: artifact.version.clone(),
+                    resolved_version: version.clone(),
                 },
                 path,
             )
@@ -137,7 +141,9 @@ impl Resolver<'_> {
             use indicatif::{ProgressBar, ProgressStyle};
 
             let pb = ProgressBar::no_length();
-            if let Some(length) = response.content_length() { pb.set_length(length) };
+            if let Some(length) = response.content_length() {
+                pb.set_length(length)
+            };
             pb.set_style(
                 ProgressStyle::with_template(
                     "{spinner:.green} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",

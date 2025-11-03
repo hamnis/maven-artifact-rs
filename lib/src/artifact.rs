@@ -6,35 +6,29 @@ use url::Url;
 #[error("{0}")]
 pub struct ParseArtifactError(String);
 
-#[derive(Clone, Debug)]
-pub struct PartialArtifact {
-    pub group_id: GroupId,
-    pub artifact_id: ArtifactId,
-}
+#[derive(Debug, Clone)]
+pub struct PartialArtifact(Artifact);
 
 impl PartialArtifact {
     pub fn new(group_id: GroupId, artifact_id: ArtifactId) -> PartialArtifact {
-        PartialArtifact {
-            group_id,
-            artifact_id,
-        }
+        PartialArtifact(Artifact::partial(group_id, artifact_id))
     }
 
     pub fn into_artifact(self, version: Version) -> Artifact {
-        Artifact::new(self.group_id.clone(), self.artifact_id.clone(), version)
+        self.0.with_version(version)
     }
 
     pub fn path(&self) -> String {
-        format!("{}/{}", self.group_id.path_string(), self.artifact_id)
+        format!("{}/{}", self.0.group_id.path_string(), self.0.artifact_id)
     }
 
     pub fn parse(input: &str) -> Result<PartialArtifact, ParseArtifactError> {
         let parts: Vec<_> = input.split(":").collect();
         if parts.len() == 2 {
-            Ok(PartialArtifact {
-                group_id: GroupId::from(parts[0]),
-                artifact_id: ArtifactId::from(parts[1]),
-            })
+            Ok(Self::new(
+                GroupId::from(parts[0]),
+                ArtifactId::from(parts[1]),
+            ))
         } else {
             Err(ParseArtifactError(format!(
                 "There are not enough or too many parts. Expected <groupId>:<artifact_id> {}",
@@ -46,7 +40,7 @@ impl PartialArtifact {
 
 impl Display for PartialArtifact {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.group_id, self.artifact_id)
+        write!(f, "{}:{}", self.0.group_id, self.0.artifact_id)
     }
 }
 
@@ -54,7 +48,7 @@ impl Display for PartialArtifact {
 pub struct Artifact {
     pub group_id: GroupId,
     pub artifact_id: ArtifactId,
-    pub version: Version,
+    pub version: Option<Version>,
     pub extension: Option<String>,
     pub classifier: Option<Classifier>,
 }
@@ -64,7 +58,17 @@ impl Artifact {
         Artifact {
             group_id,
             artifact_id,
-            version,
+            version: Some(version),
+            extension: None,
+            classifier: None,
+        }
+    }
+
+    pub fn partial(group_id: GroupId, artifact_id: ArtifactId) -> Artifact {
+        Artifact {
+            group_id,
+            artifact_id,
+            version: None,
             extension: None,
             classifier: None,
         }
@@ -72,7 +76,7 @@ impl Artifact {
 
     pub fn with_version(&self, version: Version) -> Artifact {
         let mut cloned = self.clone();
-        cloned.version = version;
+        cloned.version = Some(version);
         cloned
     }
 
@@ -95,19 +99,23 @@ impl Artifact {
     }
 
     pub fn is_snapshot(&self) -> bool {
-        self.version.is_snapshot()
+        if let Some(v) = &self.version {
+            v.is_snapshot()
+        } else {
+            false
+        }
     }
 
     pub fn path(&self) -> String {
         let base = format!("{}/{}", self.group_id.path_string(), self.artifact_id);
-        format!("{}/{}", base, self.version)
+        format!("{}/{}", base, &self.version.clone().unwrap())
     }
 
     pub fn file_name(&self) -> String {
         format!(
             "{}-{}.{}",
             self.artifact_id,
-            self.version,
+            self.version.clone().unwrap(),
             self.extension.as_deref().unwrap_or("jar")
         )
     }
@@ -120,21 +128,21 @@ impl Artifact {
                 ([g, a], [v]) => Ok(Artifact {
                     group_id: GroupId(g.to_string()),
                     artifact_id: ArtifactId(a.to_string()),
-                    version: Version(v.to_string()),
+                    version: Some(Version(v.to_string())),
                     extension: None,
                     classifier: None,
                 }),
                 ([g, a], [e, v]) => Ok(Artifact {
                     group_id: GroupId(g.to_string()),
                     artifact_id: ArtifactId(a.to_string()),
-                    version: Version(v.to_string()),
+                    version: Some(Version(v.to_string())),
                     extension: Some(e.to_string()),
                     classifier: None,
                 }),
                 ([g, a], [e, c, v]) => Ok(Artifact {
                     group_id: GroupId(g.to_string()),
                     artifact_id: ArtifactId(a.to_string()),
-                    version: Version(v.to_string()),
+                    version: Some(Version(v.to_string())),
                     extension: Some(e.to_string()),
                     classifier: Some(Classifier(c.to_string())),
                 }),
@@ -174,7 +182,9 @@ impl Display for Artifact {
             }
             _ => (),
         }
-        gav += format!(":{}", self.version).as_str();
+        if let Some(version) = self.version.clone() {
+            gav += &format!(":{}", version)
+        }
         f.write_str(gav.as_str())
     }
 }
@@ -192,7 +202,7 @@ impl ResolvedArtifact {
             self.artifact.artifact_id
         );
         let version = if self.artifact.is_snapshot() {
-            format!("{}", &self.artifact.version)
+            format!("{}", &self.artifact.version.clone().unwrap())
         } else {
             format!("{}", self.resolved_version)
         };
@@ -249,7 +259,7 @@ mod tests {
             Artifact {
                 group_id: GroupId::from("groupId"),
                 artifact_id: ArtifactId::from("artifact_id"),
-                version: Version::from("version"),
+                version: Some(Version::from("version")),
                 classifier: Some(Classifier::from("classifier")),
                 extension: Some(String::from("packaging"))
             }
@@ -266,7 +276,7 @@ mod tests {
             Artifact {
                 group_id: GroupId::from("groupId"),
                 artifact_id: ArtifactId::from("artifact_id"),
-                version: Version::from("version"),
+                version: Some(Version::from("version")),
                 classifier: None,
                 extension: Some(String::from("packaging"))
             }
