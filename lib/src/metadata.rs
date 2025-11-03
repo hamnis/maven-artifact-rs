@@ -12,7 +12,7 @@ pub enum MetadataError {
     #[error("{0} IO error while parsing")]
     IO(#[from] std::io::Error),
     #[error("{0} XML error while parsing")]
-    XML(#[from] xml::reader::Error),
+    Xml(#[from] xml::reader::Error),
     #[error("{0} Failed to parse integer")]
     IntParse(#[from] ParseIntError),
     #[error("{0} Unexpected XML error while parsing")]

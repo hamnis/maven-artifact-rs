@@ -116,7 +116,7 @@ impl Artifact {
         let parts: Vec<_> = input.split(":").collect();
         if parts.len() >= 3 {
             let (ga, rest) = parts.split_at(2);
-            match (&ga[..], &rest[..]) {
+            match (ga, rest) {
                 ([g, a], [v]) => Ok(Artifact {
                     group_id: GroupId(g.to_string()),
                     artifact_id: ArtifactId(a.to_string()),

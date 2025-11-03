@@ -137,10 +137,7 @@ impl Resolver<'_> {
             use indicatif::{ProgressBar, ProgressStyle};
 
             let pb = ProgressBar::no_length();
-            match response.content_length() {
-                Some(length) => pb.set_length(length),
-                None => (),
-            };
+            if let Some(length) = response.content_length() { pb.set_length(length) };
             pb.set_style(
                 ProgressStyle::with_template(
                     "{spinner:.green} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",

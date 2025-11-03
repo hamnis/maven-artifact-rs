@@ -9,7 +9,6 @@ use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use reqwest::{Client, ClientBuilder};
 use std::path::PathBuf;
 use std::str::FromStr;
-use tokio;
 use url::Url;
 
 // Name your user agent after your app?
