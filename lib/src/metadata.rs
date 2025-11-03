@@ -1,5 +1,6 @@
 use crate::metadata::MetadataError::Unexpected;
 pub use crate::{ArtifactId, Classifier, GroupId, Version};
+use serde::Serialize;
 use std::io::{BufReader, Cursor, Read, Seek};
 use std::num::ParseIntError;
 use thiserror::Error;
@@ -18,33 +19,43 @@ pub enum MetadataError {
     Unexpected(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct VersionedMetadata {
+    #[serde(rename = "groupId")]
     pub group_id: GroupId,
+    #[serde(rename = "artifactId")]
     pub artifact_id: ArtifactId,
     pub versioning: Versioning,
 }
 
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize)]
 pub struct Versioning {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub latest: Option<Version>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub release: Option<Version>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub versions: Option<Vec<Version>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_updated: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<Snapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot_versions: Option<Vec<SnapshotVersion>>,
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Snapshot {
     pub timestamp: String,
     pub buildNumber: i32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SnapshotVersion {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub classifier: Option<Classifier>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub extension: Option<String>,
     pub value: Version,
     pub updated: String,

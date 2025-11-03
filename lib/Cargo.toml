@@ -12,6 +12,7 @@ reqwest.workspace = true
 thiserror.workspace = true
 indicatif = { workspace = true, optional = true }
 xml-rs.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [features]
 progressbar = ["indicatif"]

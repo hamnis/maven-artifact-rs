@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use thiserror::Error;
@@ -7,7 +8,7 @@ pub mod artifact;
 mod metadata;
 pub mod resolver;
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize)]
 pub struct GroupId(String);
 
 impl GroupId {
@@ -51,7 +52,7 @@ impl Display for GroupId {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize)]
 pub struct ArtifactId(String);
 impl ArtifactId {
     pub fn into_string(self) -> String {
@@ -91,7 +92,7 @@ impl Display for ArtifactId {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize)]
 pub struct Version(String);
 impl Version {
     pub fn into_string(self) -> String {
@@ -148,7 +149,7 @@ impl Display for Version {
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize)]
 pub struct Classifier(String);
 impl Classifier {
     pub fn into_string(self) -> String {

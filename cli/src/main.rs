@@ -1,5 +1,4 @@
-use anyhow;
-use anyhow::Context;
+use anyhow::{Context, bail};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use clap::{Parser, Subcommand};
@@ -9,11 +8,32 @@ use maven_artifact::resolver::Resolver;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use reqwest::{Client, ClientBuilder};
 use std::path::PathBuf;
+use std::str::FromStr;
 use tokio;
 use url::Url;
 
 // Name your user agent after your app?
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+#[derive(Clone)]
+enum Select {
+    Latest,
+    Release,
+    Versions,
+}
+
+impl FromStr for Select {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "latest" => Ok(Self::Latest),
+            "release" => Ok(Self::Release),
+            "versions" => Ok(Self::Versions),
+            _ => bail!("Unknown select: {}", s),
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(version, about, long_about, arg_required_else_help = true)]
@@ -26,11 +46,18 @@ struct Cli {
 #[command(arg_required_else_help = true)]
 enum Commands {
     Versions {
-        #[arg(value_parser=PartialArtifact::parse)]
+        #[arg(value_parser=PartialArtifact::parse, help = "groupId:artifactId")]
         coordinates: PartialArtifact,
+        #[arg(long, default_value_t = false, conflicts_with = "select")]
+        json: bool,
+        #[arg(long, conflicts_with = "json")]
+        select: Option<Select>,
+        #[arg(long)]
+        size: Option<usize>,
     },
     Resolve {
-        #[arg(value_parser=Artifact::parse)]
+        #[arg(value_parser=Artifact::parse, help = "groupId:artifactId[:packaging[:classifier]]:version"
+        )]
         coordinates: Artifact,
         #[arg()]
         path: PathBuf,
@@ -50,11 +77,47 @@ async fn main() -> anyhow::Result<()> {
     }?;
 
     match cli.command {
-        Some(Commands::Versions { coordinates }) => {
+        Some(Commands::Versions {
+            coordinates,
+            json,
+            select,
+            size,
+        }) => {
             let client = make_client()?;
             let resolver = Resolver::new(&client, &repo);
             let meta = resolver.metadata(coordinates).await?;
-            println!("{:?}", meta);
+            if json {
+                serde_json::to_writer_pretty(std::io::stdout(), &meta)?;
+            } else {
+                match select {
+                    Some(Select::Latest) => {
+                        let Some(ver) = meta.versioning.latest else {
+                            bail!("no latest version found");
+                        };
+                        println!("{ver}");
+                    }
+                    Some(Select::Release) => {
+                        let Some(ver) = meta.versioning.release else {
+                            bail!("no latest version found");
+                        };
+                        println!("{ver}");
+                    }
+                    Some(Select::Versions) => {
+                        let size = size.unwrap_or(10);
+                        let Some(ver) = meta.versioning.versions else {
+                            bail!("no versions found");
+                        };
+                        let mut reversed = ver.clone();
+                        reversed.reverse();
+                        reversed.iter().take(size).for_each(|version| {
+                            println!("{version}");
+                        })
+                    }
+                    None => {
+                        println!("{:?}", meta);
+                    }
+                }
+            }
             Ok(())
         }
         Some(Commands::Resolve { coordinates, path }) => {

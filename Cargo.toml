@@ -11,12 +11,15 @@ members = ["lib", "cli"]
 resolver = "2"
 
 [workspace.dependencies]
-clap = { version = "4.5.39", features = ["derive"] }
-url = "2.5.4"
+clap = { version = "4.5.51", features = ["derive"] }
+url = "2.5.7"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "deflate", "gzip", "http2"] }
 thiserror = "2"
-tokio = { version = "1.45", features = ["rt", "macros"] }
+tokio = { version = "1.48", features = ["rt", "macros"] }
 anyhow = "1"
 base64 = "0.22.1"
-indicatif = "0.17.11"
-xml-rs = "0.8.26"
+indicatif = "0.18.2"
+xml-rs = "1.0.0"
+regex = "1.12.2"
+serde = "1"
+serde_json = "1"
