@@ -107,7 +107,7 @@ impl PomParser {
                     properties = Self::parse_properties(parser)?;
                 }
 
-                XmlEvent::EndDocument { .. } => {
+                XmlEvent::EndDocument => {
                     return Ok(Project {
                         artifact: state.to_artifact()?,
                         parent,
