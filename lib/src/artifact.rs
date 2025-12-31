@@ -6,6 +6,12 @@ use url::Url;
 #[error("{0}")]
 pub struct ParseArtifactError(String);
 
+impl ParseArtifactError {
+    pub fn new(err: String) -> ParseArtifactError {
+        ParseArtifactError(err)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PartialArtifact(Artifact);
 

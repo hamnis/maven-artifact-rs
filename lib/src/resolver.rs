@@ -1,6 +1,8 @@
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
-use crate::{Repository, Version, metadata};
+use crate::project::{PomParser, Project, ProjectReference};
+use crate::{Repository, Version, metadata, project};
+use bytes::Bytes;
 use reqwest::{Client, Response};
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Write};
@@ -16,8 +18,10 @@ pub enum ResolveError {
     Parse(#[from] ParseArtifactError),
     #[error("Error using reqwest {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("XML decoder error: {0}")]
-    XMLDecodeError(#[from] metadata::MetadataError),
+    #[error("XML Metadata decoder error: {0}")]
+    XMLMetadataDecodeError(#[from] metadata::MetadataError),
+    #[error("XML Project decoder error: {0}")]
+    XMLProjectDecodeError(#[from] project::PomParserError),
     #[error("IO operation failed, {0}")]
     IO(#[from] std::io::Error),
     #[error("Http error, url={url}, status={status}")]
@@ -40,17 +44,47 @@ impl Resolver<'_> {
         &self,
         artifact: PartialArtifact,
     ) -> Result<VersionedMetadata, ResolveError> {
-        self.metadata0(artifact.path()).await
+        self.maven_metadata(artifact.path()).await
     }
 
-    async fn metadata0(&self, path: String) -> Result<VersionedMetadata, ResolveError> {
-        let metadata_path = format!("{}/{}/maven-metadata.xml", self.repository.url.path(), path);
+    pub async fn project_metadata(
+        &self,
+        artifact: ProjectReference,
+    ) -> Result<Project, ResolveError> {
+        self.pom_metadata(artifact).await
+    }
+
+    fn maven_metadata(
+        &self,
+        path: String,
+    ) -> impl Future<Output = Result<VersionedMetadata, ResolveError>> {
+        self.metadata0(path, "maven-metadata.xml", VersionedMetadata::parse)
+    }
+
+    fn pom_metadata(
+        &self,
+        artifact: ProjectReference,
+    ) -> impl Future<Output = Result<Project, ResolveError>> {
+        self.metadata0(artifact.path(), "pom.xml", PomParser::parse)
+    }
+
+    async fn metadata0<A, E, FN>(
+        &self,
+        path: String,
+        file: &str,
+        parse_from: FN,
+    ) -> Result<A, ResolveError>
+    where
+        FN: Fn(Cursor<Bytes>) -> Result<A, E>,
+        ResolveError: From<E>,
+    {
+        let metadata_path = format!("{}/{}/{file}", self.repository.url.path(), path);
         let url = self.repository.url.join(&metadata_path)?;
         let response = self.client.get(url.clone()).send().await?;
         if response.status().is_success() {
             let bytes = response.bytes().await?;
             let c = Cursor::new(bytes);
-            let versioned: VersionedMetadata = VersionedMetadata::parse(c)?;
+            let versioned = parse_from(c)?;
             Ok(versioned)
         } else {
             Err(ResolveError::GenericHttpError {
@@ -67,7 +101,7 @@ impl Resolver<'_> {
             .ok_or(ResolveError::Message(String::from("No version set")))?;
         if artifact.is_snapshot() {
             if self.repository.snapshots {
-                let meta = self.metadata0(artifact.path()).await?;
+                let meta = self.maven_metadata(artifact.path()).await?;
                 let versioning = meta.versioning;
                 let snapshot = versioning.snapshot.unwrap();
                 let meta_version =
@@ -92,7 +126,7 @@ impl Resolver<'_> {
                 )))
             }
         } else if version.is_meta_version() {
-            let meta = self.metadata(artifact.clone().into()).await?;
+            let meta = self.maven_metadata(artifact.path()).await?;
             let versioning = meta.versioning;
             let maybe_resolved = if version.is_release() {
                 versioning.release

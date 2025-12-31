@@ -1,4 +1,4 @@
-use crate::artifact::Artifact;
+use crate::artifact::{Artifact, ParseArtifactError};
 use crate::{ArtifactId, Classifier, GroupId, Version};
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read, Seek};
@@ -7,23 +7,23 @@ use xml::EventReader;
 use xml::reader::XmlEvent;
 
 #[derive(Debug, Clone)]
-struct Dependency {
-    artifact: Artifact,
-    scope: Option<String>,
+pub struct Dependency {
+    pub artifact: Artifact,
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
-struct DependencyManagement {
-    dependencies: Vec<Dependency>,
+pub struct DependencyManagement {
+    pub dependencies: Vec<Dependency>,
 }
 
 #[derive(Debug, Clone)]
-struct Project {
-    artifact: Artifact,
-    parent: Option<Artifact>,
-    dependency_management: DependencyManagement,
-    dependencies: Vec<Dependency>,
-    properties: HashMap<String, String>,
+pub struct Project {
+    pub artifact: Artifact,
+    pub parent: Option<Artifact>,
+    pub dependency_management: DependencyManagement,
+    pub dependencies: Vec<Dependency>,
+    pub properties: HashMap<String, String>,
 }
 
 impl Project {
@@ -38,6 +38,34 @@ impl Project {
     }
 }
 
+pub struct ProjectReference(Artifact);
+
+impl ProjectReference {
+    pub fn new(group_id: GroupId, artifact_id: ArtifactId, version: Version) -> ProjectReference {
+        ProjectReference(Artifact::new(group_id, artifact_id, version))
+    }
+
+    pub fn parse(input: &str) -> Result<ProjectReference, ParseArtifactError> {
+        let parts: Vec<_> = input.split(":").collect();
+        if parts.len() == 3 {
+            Ok(Self::new(
+                GroupId::from(parts[0]),
+                ArtifactId::from(parts[1]),
+                Version::from(parts[2]),
+            ))
+        } else {
+            Err(ParseArtifactError::new(format!(
+                "There are not enough or too many parts. Expected <groupId>:<artifactId>:<version>, but was {}",
+                input
+            )))
+        }
+    }
+
+    pub fn path(&self) -> String {
+        self.0.path()
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum PomParserError {
     #[error("{0} IO error while parsing")]
@@ -48,7 +76,7 @@ pub enum PomParserError {
     Unexpected(String),
 }
 
-struct PomParser {}
+pub struct PomParser {}
 
 impl PomParser {
     pub fn from_str(input: &str) -> Result<Project, PomParserError> {
