@@ -8,6 +8,7 @@ pub mod artifact;
 mod metadata;
 pub mod resolver;
 pub mod project;
+mod xml;
 
 const VARIABLE_PATTERN: &str = "\\$\\{(.*)}";
 

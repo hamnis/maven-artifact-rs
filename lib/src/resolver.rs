@@ -1,7 +1,7 @@
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
-use crate::project::{PomParser, Project, ProjectReference};
-use crate::{Repository, Version, metadata, project};
+use crate::project::{Project, ProjectReference};
+use crate::{Repository, Version};
 use bytes::Bytes;
 use reqwest::{Client, Response};
 use std::fs::File;
@@ -19,9 +19,9 @@ pub enum ResolveError {
     #[error("Error using reqwest {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("XML Metadata decoder error: {0}")]
-    XMLMetadataDecodeError(#[from] metadata::MetadataError),
+    XMLMetadataDecodeError(#[from] crate::metadata::MetadataError),
     #[error("XML Project decoder error: {0}")]
-    XMLProjectDecodeError(#[from] project::PomParserError),
+    XMLProjectDecodeError(#[from] crate::project::PomParserError),
     #[error("IO operation failed, {0}")]
     IO(#[from] std::io::Error),
     #[error("Http error, url={url}, status={status}")]
@@ -65,7 +65,7 @@ impl Resolver<'_> {
         &self,
         artifact: ProjectReference,
     ) -> impl Future<Output = Result<Project, ResolveError>> {
-        self.metadata0(artifact.path(), "pom.xml", PomParser::parse)
+        self.metadata0(artifact.path(), "pom.xml", Project::parse)
     }
 
     async fn metadata0<A, E, FN>(
@@ -94,7 +94,11 @@ impl Resolver<'_> {
         }
     }
 
-    pub async fn download(&self, artifact: &Artifact, path: &Path) -> Result<PathBuf, ResolveError> {
+    pub async fn download(
+        &self,
+        artifact: &Artifact,
+        path: &Path,
+    ) -> Result<PathBuf, ResolveError> {
         let version = artifact
             .version
             .clone()
