@@ -15,6 +15,7 @@ xml-rs.workspace = true
 serde = { workspace = true, features = ["derive"] }
 bytes.workspace = true
 regex.workspace = true
+futures.workspace = true
 
 [features]
 progressbar = ["indicatif"]

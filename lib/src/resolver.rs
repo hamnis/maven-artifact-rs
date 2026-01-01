@@ -1,12 +1,14 @@
+use std::collections::HashMap;
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
-use crate::project::{Project, ProjectReference};
+use crate::project::{Dependency, Project, ProjectReference};
 use crate::{Repository, Version};
 use bytes::Bytes;
 use reqwest::{Client, Response};
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Write};
 use std::path::{Path, PathBuf};
+use futures::future::join_all;
 use thiserror::Error;
 use url::Url;
 
@@ -207,5 +209,112 @@ impl Resolver<'_> {
             file.write_all(&chunk)?;
         }
         Ok(())
+    }
+
+
+    async fn get_parent(&self, project: &Project) -> Option<Project> {
+        if let Some(p) = &project.parent {
+            let next = self
+                .project_metadata(ProjectReference::from(p))
+                .await
+                .ok()?;
+            Some(next)
+        } else {
+            None
+        }
+    }
+
+    async fn get_parents(&self, project: &Project) -> Vec<Project> {
+        let mut parents = vec![];
+        let mut maybe_parent = self.get_parent(project).await;
+        while let Some(p) = maybe_parent {
+            parents.push(p.clone());
+            maybe_parent = self.get_parent(&p).await
+        }
+        parents
+    }
+
+    pub async fn collect_dependencies(
+        &self,
+        artifact: &Artifact,
+    ) -> Result<Vec<Artifact>, ResolveError> {
+        let mut vec = vec![];
+
+        let project = self
+            .project_metadata(ProjectReference::from(artifact))
+            .await?;
+        let parents = self.get_parents(&project).await;
+        let boms = self.get_boms_from_all(&project, &parents).await?;
+        let mut props = parents.iter().rfold(HashMap::new(), |mut p, item| {
+            p.extend(item.properties.clone());
+            p
+        });
+        props.extend(project.properties);
+
+        for dep in project.dependencies {
+            let dependency = dep.resolve_properties(&props);
+            if dependency.artifact.version.is_some() {
+                vec.push(dependency.artifact.clone())
+            } else {
+                if let Some(resolved) = boms.get(&dependency.mngt_key()) {
+                    vec.push(resolved.artifact.clone())
+                }
+            }
+        }
+
+        Ok(vec)
+    }
+
+    async fn get_boms_from_all(
+        &self,
+        project: &Project,
+        parents: &[Project],
+    ) -> Result<HashMap<String, Dependency>, ResolveError> {
+        let mut dependencies: HashMap<String, Dependency> = HashMap::new();
+        let resolved: Result<Vec<Vec<Dependency>>, ResolveError> = join_all(
+            parents
+                .into_iter()
+                .map(|x| self.get_bill_of_materials(x)),
+        )
+            .await
+            .into_iter()
+            .collect();
+
+        for parent_boms in resolved? {
+            dependencies.extend(Dependency::mapped(&parent_boms))
+        }
+
+        let boms = self.get_bill_of_materials(project).await?;
+        dependencies.extend(Dependency::mapped(&boms));
+
+        Ok(dependencies)
+    }
+
+    async fn get_bill_of_materials(
+        &self,
+        project: &Project,
+    ) -> Result<Vec<Dependency>, ResolveError> {
+        let mut dependencies: Vec<Dependency> = vec![];
+        let bill_of_materials_deps: Vec<&Dependency> = project
+            .dependency_management
+            .dependencies
+            .iter()
+            .filter(|d| d.is_scope("import") && d.artifact.ext_or_jar() == "pom")
+            .collect();
+
+        let all: Result<Vec<Project>, ResolveError> = join_all(
+            bill_of_materials_deps
+                .into_iter()
+                .map(|d| self.project_metadata(ProjectReference::from(&d.artifact))),
+        )
+            .await
+            .into_iter()
+            .collect();
+
+        for p in all? {
+            dependencies.extend(p.resolve_properties_this().dependencies);
+        }
+
+        Ok(dependencies)
     }
 }

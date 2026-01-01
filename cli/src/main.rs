@@ -2,16 +2,15 @@ use anyhow::{Context, bail};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use clap::{Parser, Subcommand};
-use futures::future::join_all;
 use maven_artifact::Repository;
 use maven_artifact::artifact::{Artifact, PartialArtifact};
 use maven_artifact::project::{Dependency, Project, ProjectReference};
 use maven_artifact::resolver::{ResolveError, Resolver};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use reqwest::{Client, ClientBuilder};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
+use futures::future::join_all;
 use url::Url;
 
 // Name your user agent after your app?
@@ -174,7 +173,7 @@ async fn main() -> anyhow::Result<()> {
             };
 
             if include_dependencies {
-                let deps = collect_dependencies(&resolver, &coordinates).await?;
+                let deps = resolver.collect_dependencies(&coordinates).await?;
                 let joined: Result<Vec<PathBuf>, ResolveError> =
                     join_all(deps.iter().map(|a| resolver.download(a, lib_dir.as_path())))
                         .await
@@ -192,111 +191,6 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-async fn get_parent<'a>(resolver: &'a Resolver<'a>, project: &'a Project) -> Option<Project> {
-    if let Some(p) = &project.parent {
-        let next = resolver
-            .project_metadata(ProjectReference::from(p))
-            .await
-            .ok()?;
-        Some(next)
-    } else {
-        None
-    }
-}
-
-async fn get_parents<'a>(resolver: &'a Resolver<'a>, project: &Project) -> Vec<Project> {
-    let mut parents = vec![];
-    let mut maybe_parent = get_parent(resolver, project).await;
-    while let Some(p) = maybe_parent {
-        parents.push(p.clone());
-        maybe_parent = get_parent(resolver, &p).await
-    }
-    parents
-}
-
-async fn collect_dependencies<'a>(
-    resolver: &'a Resolver<'a>,
-    artifact: &Artifact,
-) -> anyhow::Result<Vec<Artifact>> {
-    let mut vec = vec![];
-
-    let project = resolver
-        .project_metadata(ProjectReference::from(artifact))
-        .await?;
-    let parents = get_parents(resolver, &project).await;
-    let boms = get_boms_from_all(resolver, &project, &parents).await?;
-    let mut props = parents.iter().rfold(HashMap::new(), |mut p, item| {
-        p.extend(item.properties.clone());
-        p
-    });
-    props.extend(project.properties);
-
-    for dep in project.dependencies {
-        let dependency = dep.resolve_properties(&props);
-        if dependency.artifact.version.is_some() {
-            vec.push(dependency.artifact.clone())
-        } else {
-            if let Some(resolved) = boms.get(&dependency.mngt_key()) {
-                vec.push(resolved.artifact.clone())
-            }
-        }
-    }
-
-    Ok(vec)
-}
-
-async fn get_boms_from_all<'a>(
-    resolver: &'a Resolver<'a>,
-    project: &Project,
-    parents: &[Project],
-) -> Result<HashMap<String, Dependency>, ResolveError> {
-    let mut dependencies: HashMap<String, Dependency> = HashMap::new();
-    let resolved: Result<Vec<Vec<Dependency>>, ResolveError> = join_all(
-        parents
-            .into_iter()
-            .map(|x| get_bill_of_materials(resolver, x)),
-    )
-    .await
-    .into_iter()
-    .collect();
-
-    for parent_boms in resolved? {
-        dependencies.extend(Dependency::mapped(&parent_boms))
-    }
-
-    let boms = get_bill_of_materials(resolver, project).await?;
-    dependencies.extend(Dependency::mapped(&boms));
-
-    Ok(dependencies)
-}
-
-async fn get_bill_of_materials<'a>(
-    resolver: &'a Resolver<'a>,
-    project: &Project,
-) -> Result<Vec<Dependency>, ResolveError> {
-    let mut dependencies: Vec<Dependency> = vec![];
-    let bill_of_materials_deps: Vec<&Dependency> = project
-        .dependency_management
-        .dependencies
-        .iter()
-        .filter(|d| d.is_scope("import") && d.artifact.ext_or_jar() == "pom")
-        .collect();
-
-    let all: Result<Vec<Project>, ResolveError> = join_all(
-        bill_of_materials_deps
-            .into_iter()
-            .map(|d| resolver.project_metadata(ProjectReference::from(&d.artifact))),
-    )
-    .await
-    .into_iter()
-    .collect();
-
-    for p in all? {
-        dependencies.extend(p.resolve_properties_this().dependencies);
-    }
-
-    Ok(dependencies)
-}
 
 fn make_client() -> anyhow::Result<Client> {
     let client = ClientBuilder::new().user_agent(APP_USER_AGENT);

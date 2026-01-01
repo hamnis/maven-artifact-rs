@@ -713,6 +713,7 @@ name = "maven-artifact"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "futures",
  "indicatif",
  "regex",
  "reqwest",
@@ -731,7 +732,6 @@ dependencies = [
  "clap",
  "futures",
  "maven-artifact",
- "regex",
  "reqwest",
  "serde_json",
  "tokio",
