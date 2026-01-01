@@ -1,4 +1,4 @@
-use crate::artifact::{Artifact, ParseArtifactError};
+use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact};
 use crate::{ArtifactId, Classifier, GroupId, Version};
 use std::collections::HashMap;
 use std::io::{BufReader, Cursor, Read, Seek};
@@ -10,6 +10,30 @@ use xml::reader::XmlEvent;
 pub struct Dependency {
     pub artifact: Artifact,
     pub scope: Option<String>,
+}
+
+impl Dependency {
+    pub fn resolve_properties(&self, props: &HashMap<String, String>) -> Dependency {
+        Dependency {
+            artifact: self.artifact.resolve_properties(props),
+            scope: self.scope.clone(),
+        }
+    }
+
+    pub fn mngt_key(&self) -> String {
+        let partial = PartialArtifact::from(self.artifact.clone());
+        partial.to_string()
+    }
+
+    pub fn mapped(vec: &[Dependency]) -> HashMap<String, Dependency> {
+        vec.iter()
+            .map(|dep| (dep.mngt_key(), dep.clone()))
+            .collect()
+    }
+
+    pub fn is_scope(&self, query: &str) -> bool {
+        self.scope.as_ref().is_some_and(|s| s == query)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -36,9 +60,44 @@ impl Project {
             properties: HashMap::default(),
         }
     }
+
+    pub fn reference(&self) -> ProjectReference {
+        ProjectReference::from(&self.artifact)
+    }
+
+    pub fn resolve_properties(&self) -> Project {
+        let mut modified = self.clone();
+        modified.artifact = self.artifact.resolve_properties(&self.properties);
+        if let Some(parent) = self.parent.clone() {
+            modified.parent = Some(parent.resolve_properties(&self.properties))
+        }
+        modified.dependency_management.dependencies = self
+            .dependency_management
+            .dependencies
+            .iter()
+            .map(|d| d.resolve_properties(&self.properties))
+            .collect();
+        modified.dependencies = self
+            .dependencies
+            .iter()
+            .map(|d| d.resolve_properties(&self.properties))
+            .collect();
+
+        modified
+    }
+
+    pub fn parse<R: Read + Seek>(input: R) -> Result<Project, PomParserError> {
+        PomParser::parse(input)
+    }
 }
 
 pub struct ProjectReference(Artifact);
+
+impl From<&Artifact> for ProjectReference {
+    fn from(value: &Artifact) -> Self {
+        ProjectReference(value.clone())
+    }
+}
 
 impl ProjectReference {
     pub fn new(group_id: GroupId, artifact_id: ArtifactId, version: Version) -> ProjectReference {

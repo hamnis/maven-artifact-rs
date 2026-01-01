@@ -94,7 +94,7 @@ impl Resolver<'_> {
         }
     }
 
-    pub async fn download(&self, artifact: Artifact, path: &Path) -> Result<PathBuf, ResolveError> {
+    pub async fn download(&self, artifact: &Artifact, path: &Path) -> Result<PathBuf, ResolveError> {
         let version = artifact
             .version
             .clone()
@@ -166,7 +166,7 @@ impl Resolver<'_> {
         dir: &Path,
     ) -> Result<PathBuf, ResolveError> {
         let url = artifact.uri(self.repository)?;
-        eprintln!("{}", url);
+        eprintln!("Downloading {}", url);
         let mut response = self.client.get(url.clone()).send().await?;
         let path = dir.join(artifact.artifact.file_name());
 

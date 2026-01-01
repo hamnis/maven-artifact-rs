@@ -16,3 +16,4 @@ maven-artifact = { path = "../lib", features = ["progressbar"] }
 base64.workspace = true
 regex.workspace = true
 serde_json.workspace = true
+futures.workspace = true

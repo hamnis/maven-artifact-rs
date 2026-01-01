@@ -7,7 +7,9 @@ use url::Url;
 pub mod artifact;
 mod metadata;
 pub mod resolver;
-mod project;
+pub mod project;
+
+const VARIABLE_PATTERN: &str = "\\$\\{(.*)}";
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Hash, Debug, Serialize)]
 pub struct GroupId(String);

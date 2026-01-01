@@ -1,4 +1,6 @@
 use crate::*;
+use regex::Regex;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use url::Url;
 
@@ -122,8 +124,16 @@ impl Artifact {
             "{}-{}.{}",
             self.artifact_id,
             self.version.clone().unwrap(),
-            self.extension.as_deref().unwrap_or("jar")
+            self.ext_or_jar()
         )
+    }
+
+    pub fn is_project(&self) -> bool {
+        self.ext_or_jar() == "pom"
+    }
+
+    pub fn ext_or_jar(&self) -> &str {
+        self.extension.as_deref().unwrap_or("jar")
     }
 
     pub fn parse(input: &str) -> Result<Artifact, ParseArtifactError> {
@@ -160,6 +170,29 @@ impl Artifact {
                 parts.len()
             )))
         }
+    }
+
+    fn resolve_string<'a>(input: &str, props: &'a HashMap<String, String>) -> Option<&'a String> {
+        let r = Regex::new(VARIABLE_PATTERN).ok();
+        r.and_then(|r| {
+            r.captures(input)
+                .and_then(|capt| capt.get(0).and_then(|g| props.get(g.as_str())))
+        })
+    }
+
+    pub fn resolve_properties(&self, props: &HashMap<String, String>) -> Artifact {
+        let mut modified = self.clone();
+        if let Some(resolved) = Self::resolve_string(self.group_id.as_ref(), props) {
+            modified.group_id = GroupId(resolved.to_string())
+        }
+        if let Some(resolved) = Self::resolve_string(self.artifact_id.as_ref(), props) {
+            modified.artifact_id = ArtifactId(resolved.to_string())
+        }
+
+        modified.version = self.version.clone().and_then(|v| {
+            Self::resolve_string(v.0.as_str(), props).map(|v| Version(v.to_string()))
+        });
+        modified
     }
 }
 
