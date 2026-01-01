@@ -1,14 +1,14 @@
-use std::collections::HashMap;
 use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact, ResolvedArtifact};
 use crate::metadata::VersionedMetadata;
 use crate::project::{Dependency, Project, ProjectReference};
 use crate::{Repository, Version};
 use bytes::Bytes;
+use futures::future::join_all;
 use reqwest::{Client, Response};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Write};
 use std::path::{Path, PathBuf};
-use futures::future::join_all;
 use thiserror::Error;
 use url::Url;
 
@@ -63,11 +63,10 @@ impl Resolver<'_> {
         self.metadata0(path, "maven-metadata.xml", VersionedMetadata::parse)
     }
 
-    fn pom_metadata(
-        &self,
-        artifact: ProjectReference,
-    ) -> impl Future<Output = Result<Project, ResolveError>> {
-        self.metadata0(artifact.path(), "pom.xml", Project::parse)
+    async fn pom_metadata(&self, artifact: ProjectReference) -> Result<Project, ResolveError> {
+        let file_name = artifact.pom_file_name();
+        self.metadata0(artifact.path(), &file_name, Project::parse)
+            .await
     }
 
     async fn metadata0<A, E, FN>(
@@ -175,32 +174,38 @@ impl Resolver<'_> {
         eprintln!("Downloading {}", url);
         let mut response = self.client.get(url.clone()).send().await?;
         let path = dir.join(artifact.artifact.file_name());
+        if response.status().is_success() {
+            #[cfg(feature = "progressbar")]
+            {
+                use indicatif::{ProgressBar, ProgressStyle};
 
-        #[cfg(feature = "progressbar")]
-        {
-            use indicatif::{ProgressBar, ProgressStyle};
+                let pb = ProgressBar::no_length();
+                if let Some(length) = response.content_length() {
+                    pb.set_length(length)
+                };
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner:.green} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+                    )
+                    .unwrap()
+                    .progress_chars("#>-"),
+                );
+                let mut file = BufWriter::new(pb.wrap_write(File::create(&path)?));
+                Self::write(&mut response, &mut file).await?;
+            }
+            #[cfg(not(feature = "progressbar"))]
+            {
+                let mut file = BufWriter::new(File::create(&path)?);
+                Self::write(&mut response, &mut file).await?;
+            }
 
-            let pb = ProgressBar::no_length();
-            if let Some(length) = response.content_length() {
-                pb.set_length(length)
-            };
-            pb.set_style(
-                ProgressStyle::with_template(
-                    "{spinner:.green} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})",
-                )
-                .unwrap()
-                .progress_chars("#>-"),
-            );
-            let mut file = BufWriter::new(pb.wrap_write(File::create(&path)?));
-            Self::write(&mut response, &mut file).await?;
+            Ok(path)
+        } else {
+            Err(ResolveError::GenericHttpError {
+                url,
+                status: response.status().as_u16(),
+            })
         }
-        #[cfg(not(feature = "progressbar"))]
-        {
-            let mut file = BufWriter::new(File::create(&path)?);
-            Self::write(&mut response, &mut file).await?;
-        }
-
-        Ok(path)
     }
 
     async fn write<W: Write>(response: &mut Response, file: &mut W) -> Result<(), ResolveError> {
@@ -210,7 +215,6 @@ impl Resolver<'_> {
         }
         Ok(())
     }
-
 
     async fn get_parent(&self, project: &Project) -> Option<Project> {
         if let Some(p) = &project.parent {
@@ -249,14 +253,22 @@ impl Resolver<'_> {
             p.extend(item.properties.clone());
             p
         });
-        props.extend(project.properties);
+        props.extend(project.properties.clone());
 
-        for dep in project.dependencies {
-            let dependency = dep.resolve_properties(&props);
-            if dependency.artifact.version.is_some() {
-                vec.push(dependency.artifact.clone())
-            } else if let Some(resolved) = boms.get(&dependency.mngt_key()) {
-                vec.push(resolved.artifact.clone())
+        for dep in &project.dependencies {
+            if [String::from("compile"), String::from("runtime")]
+                .contains(&dep.scope.clone().unwrap_or(String::from("compile")))
+            {
+                let dependency = dep.resolve_properties(&props);
+                if dependency.artifact.artifact_id.contains("*") {
+                    eprintln!("{:?}", &project)
+                }
+
+                if dependency.artifact.version.is_some() {
+                    vec.push(dependency.artifact.clone())
+                } else if let Some(resolved) = boms.get(&dependency.mngt_key()) {
+                    vec.push(resolved.artifact.clone())
+                }
             }
         }
 
@@ -269,14 +281,11 @@ impl Resolver<'_> {
         parents: &[Project],
     ) -> Result<HashMap<String, Dependency>, ResolveError> {
         let mut dependencies: HashMap<String, Dependency> = HashMap::new();
-        let resolved: Result<Vec<Vec<Dependency>>, ResolveError> = join_all(
-            parents
-                .iter()
-                .map(|x| self.get_bill_of_materials(x)),
-        )
-            .await
-            .into_iter()
-            .collect();
+        let resolved: Result<Vec<Vec<Dependency>>, ResolveError> =
+            join_all(parents.iter().map(|x| self.get_bill_of_materials(x)))
+                .await
+                .into_iter()
+                .collect();
 
         for parent_boms in resolved? {
             dependencies.extend(Dependency::mapped(&parent_boms))
@@ -305,9 +314,9 @@ impl Resolver<'_> {
                 .into_iter()
                 .map(|d| self.project_metadata(ProjectReference::from(&d.artifact))),
         )
-            .await
-            .into_iter()
-            .collect();
+        .await
+        .into_iter()
+        .collect();
 
         for p in all? {
             dependencies.extend(p.resolve_properties_this().dependencies);

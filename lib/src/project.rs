@@ -142,6 +142,13 @@ impl ProjectReference {
     pub fn path(&self) -> String {
         self.0.path()
     }
+
+    pub fn pom_file_name(&self) -> String {
+        self.0
+            .with_extension("pom".to_string())
+            .file_name()
+            .to_string()
+    }
 }
 
 #[cfg(test)]

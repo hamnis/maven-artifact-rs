@@ -2,14 +2,15 @@ use anyhow::{Context, bail};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use clap::{Parser, Subcommand};
+use futures::future::join_all;
 use maven_artifact::Repository;
 use maven_artifact::artifact::{Artifact, PartialArtifact};
 use maven_artifact::resolver::{ResolveError, Resolver};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use reqwest::{Client, ClientBuilder};
+use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use futures::future::join_all;
 use url::Url;
 
 // Name your user agent after your app?
@@ -173,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
 
             if include_dependencies {
                 let deps = resolver.collect_dependencies(&coordinates).await?;
+                fs::create_dir_all(lib_dir.as_path())?;
                 let joined: Result<Vec<PathBuf>, ResolveError> =
                     join_all(deps.iter().map(|a| resolver.download(a, lib_dir.as_path())))
                         .await
@@ -189,7 +191,6 @@ async fn main() -> anyhow::Result<()> {
         None => Ok(()),
     }
 }
-
 
 fn make_client() -> anyhow::Result<Client> {
     let client = ClientBuilder::new().user_agent(APP_USER_AGENT);
