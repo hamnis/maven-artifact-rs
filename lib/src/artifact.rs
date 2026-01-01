@@ -176,7 +176,7 @@ impl Artifact {
         let r = Regex::new(VARIABLE_PATTERN).ok();
         r.and_then(|r| {
             r.captures(input)
-                .and_then(|capt| capt.get(0).and_then(|g| props.get(g.as_str())))
+                .and_then(|capt| capt.get(1).and_then(|g| props.get(g.as_str())))
         })
     }
 
@@ -189,9 +189,12 @@ impl Artifact {
             modified.artifact_id = ArtifactId(resolved.to_string())
         }
 
-        modified.version = self.version.clone().and_then(|v| {
-            Self::resolve_string(v.0.as_str(), props).map(|v| Version(v.to_string()))
-        });
+        modified.version = self
+            .version
+            .clone()
+            .and_then(|v| Self::resolve_string(v.0.as_str(), props).map(|v| Version(v.to_string())))
+            .or(self.version.clone());
+
         modified
     }
 }

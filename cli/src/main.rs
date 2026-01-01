@@ -292,7 +292,7 @@ async fn get_bill_of_materials<'a>(
     .collect();
 
     for p in all? {
-        dependencies.extend(p.resolve_properties().dependencies);
+        dependencies.extend(p.resolve_properties_this().dependencies);
     }
 
     Ok(dependencies)

@@ -22,6 +22,7 @@ impl GroupId {
     pub fn path_string(&self) -> String {
         self.0.replace(".", "/")
     }
+    pub fn has_pattern(&self) -> bool { self.0.contains("${")}
 }
 
 impl From<String> for GroupId {
@@ -62,6 +63,7 @@ impl ArtifactId {
     pub fn into_string(self) -> String {
         self.0
     }
+    pub fn has_pattern(&self) -> bool { self.0.contains("${")}
 }
 
 impl From<String> for ArtifactId {
@@ -119,6 +121,7 @@ impl Version {
         let lower = self.0.to_lowercase();
         lower == "release"
     }
+    pub fn has_pattern(&self) -> bool { self.0.contains("${")}
 }
 
 impl From<String> for Version {

@@ -10,6 +10,13 @@ pub struct Dependency {
 }
 
 impl Dependency {
+    pub fn new(artifact: Artifact) -> Dependency {
+        Dependency {
+            artifact,
+            scope: None,
+        }
+    }
+
     pub fn resolve_properties(&self, props: &HashMap<String, String>) -> Dependency {
         Dependency {
             artifact: self.artifact.resolve_properties(props),
@@ -50,11 +57,22 @@ pub struct Project {
 impl Project {
     pub fn new(artifact: Artifact) -> Self {
         Project {
-            artifact,
+            artifact: artifact.clone(),
             parent: Option::default(),
             dependency_management: DependencyManagement::default(),
             dependencies: Vec::default(),
-            properties: HashMap::default(),
+            properties: {
+                let mut map = HashMap::default();
+                map.insert("project.groupId".to_string(), artifact.group_id.to_string());
+                map.insert(
+                    "project.artifactId".to_string(),
+                    artifact.artifact_id.to_string(),
+                );
+                if let Some(v) = &artifact.version {
+                    map.insert("project.version".to_string(), v.to_string());
+                }
+                map
+            },
         }
     }
 
@@ -62,22 +80,26 @@ impl Project {
         ProjectReference::from(&self.artifact)
     }
 
-    pub fn resolve_properties(&self) -> Project {
+    pub fn resolve_properties_this(&self) -> Project {
+        self.resolve_properties(&self.properties)
+    }
+
+    pub fn resolve_properties(&self, properties: &HashMap<String, String>) -> Project {
         let mut modified = self.clone();
-        modified.artifact = self.artifact.resolve_properties(&self.properties);
+        modified.artifact = self.artifact.resolve_properties(properties);
         if let Some(parent) = self.parent.clone() {
-            modified.parent = Some(parent.resolve_properties(&self.properties))
+            modified.parent = Some(parent.resolve_properties(properties))
         }
         modified.dependency_management.dependencies = self
             .dependency_management
             .dependencies
             .iter()
-            .map(|d| d.resolve_properties(&self.properties))
+            .map(|d| d.resolve_properties(&properties))
             .collect();
         modified.dependencies = self
             .dependencies
             .iter()
-            .map(|d| d.resolve_properties(&self.properties))
+            .map(|d| d.resolve_properties(&properties))
             .collect();
 
         modified
@@ -178,5 +200,28 @@ mod test {
         let parsed = Project::parse(Cursor::new(pom));
         println!("{:?}", parsed);
         assert!(parsed.is_ok());
+    }
+
+    #[test]
+    fn resolve_properties() {
+        let mut project = Project::new(Artifact::new(
+            GroupId::from("com.example"),
+            ArtifactId::from("example"),
+            Version::from("1.2.3"),
+        ));
+        let dep =
+            Dependency::new(Artifact::parse("com.example:example-lib:${project.version}").unwrap());
+        project.dependencies.push(dep.clone());
+
+        let resolved = project.resolve_properties_this();
+        assert_eq!(
+            &project.artifact.version,
+            &resolved.dependencies.first().unwrap().artifact.version
+        );
+
+        assert_ne!(
+            &dep.artifact.version,
+            &resolved.dependencies.first().unwrap().artifact.version
+        );
     }
 }
