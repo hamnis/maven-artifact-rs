@@ -2,7 +2,6 @@ use crate::artifact::{Artifact, ParseArtifactError, PartialArtifact};
 use crate::{ArtifactId, GroupId, Version};
 use std::collections::HashMap;
 use std::io::{Read, Seek};
-use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct Dependency {
@@ -37,16 +36,6 @@ impl Dependency {
 #[derive(Debug, Clone, Default)]
 pub struct DependencyManagement {
     pub dependencies: Vec<Dependency>,
-}
-
-#[derive(Error, Debug)]
-pub enum PomParserError {
-    #[error("{0} IO error while parsing")]
-    IO(#[from] std::io::Error),
-    #[error("{0} XML error while parsing")]
-    Xml(#[from] xml::reader::Error),
-    #[error("{0} Unexpected XML error while parsing")]
-    Unexpected(String),
 }
 
 #[derive(Debug, Clone)]
@@ -94,7 +83,7 @@ impl Project {
         modified
     }
 
-    pub fn parse<R: Read + Seek>(input: R) -> Result<Project, PomParserError> {
+    pub fn parse<R: Read + Seek>(input: R) -> Result<Project, crate::pom::PomParserError> {
         crate::pom::PomParser::parse(input)
     }
 }

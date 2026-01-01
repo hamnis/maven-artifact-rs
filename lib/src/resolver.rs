@@ -21,7 +21,7 @@ pub enum ResolveError {
     #[error("XML Metadata decoder error: {0}")]
     XMLMetadataDecodeError(#[from] crate::metadata::MetadataError),
     #[error("XML Project decoder error: {0}")]
-    XMLProjectDecodeError(#[from] crate::project::PomParserError),
+    XMLProjectDecodeError(#[from] crate::pom::PomParserError),
     #[error("IO operation failed, {0}")]
     IO(#[from] std::io::Error),
     #[error("Http error, url={url}, status={status}")]

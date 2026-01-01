@@ -1,10 +1,21 @@
 use crate::artifact::Artifact;
-use crate::project::{Dependency, DependencyManagement, PomParserError, Project};
+use crate::project::{Dependency, DependencyManagement, Project};
 use crate::{ArtifactId, Classifier, GroupId, Version};
 use std::collections::HashMap;
 use std::io::{BufReader, Read, Seek};
+use thiserror::Error;
 use xml::EventReader;
 use xml::reader::XmlEvent;
+
+#[derive(Error, Debug)]
+pub enum PomParserError {
+    #[error("{0} IO error while parsing")]
+    IO(#[from] std::io::Error),
+    #[error("{0} XML error while parsing")]
+    Xml(#[from] xml::reader::Error),
+    #[error("{0} Unexpected XML error while parsing")]
+    Unexpected(String),
+}
 
 pub struct PomParser {}
 
