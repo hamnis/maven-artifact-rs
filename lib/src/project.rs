@@ -95,7 +95,7 @@ impl Project {
     }
 
     pub fn parse<R: Read + Seek>(input: R) -> Result<Project, PomParserError> {
-        crate::xml::PomParser::parse(input)
+        crate::pom::PomParser::parse(input)
     }
 }
 
