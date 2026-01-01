@@ -94,12 +94,12 @@ impl Project {
             .dependency_management
             .dependencies
             .iter()
-            .map(|d| d.resolve_properties(&properties))
+            .map(|d| d.resolve_properties(properties))
             .collect();
         modified.dependencies = self
             .dependencies
             .iter()
-            .map(|d| d.resolve_properties(&properties))
+            .map(|d| d.resolve_properties(properties))
             .collect();
 
         modified

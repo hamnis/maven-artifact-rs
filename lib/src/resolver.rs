@@ -255,10 +255,8 @@ impl Resolver<'_> {
             let dependency = dep.resolve_properties(&props);
             if dependency.artifact.version.is_some() {
                 vec.push(dependency.artifact.clone())
-            } else {
-                if let Some(resolved) = boms.get(&dependency.mngt_key()) {
-                    vec.push(resolved.artifact.clone())
-                }
+            } else if let Some(resolved) = boms.get(&dependency.mngt_key()) {
+                vec.push(resolved.artifact.clone())
             }
         }
 
@@ -273,7 +271,7 @@ impl Resolver<'_> {
         let mut dependencies: HashMap<String, Dependency> = HashMap::new();
         let resolved: Result<Vec<Vec<Dependency>>, ResolveError> = join_all(
             parents
-                .into_iter()
+                .iter()
                 .map(|x| self.get_bill_of_materials(x)),
         )
             .await

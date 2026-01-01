@@ -4,7 +4,6 @@ use base64::prelude::BASE64_STANDARD;
 use clap::{Parser, Subcommand};
 use maven_artifact::Repository;
 use maven_artifact::artifact::{Artifact, PartialArtifact};
-use maven_artifact::project::{Dependency, Project, ProjectReference};
 use maven_artifact::resolver::{ResolveError, Resolver};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use reqwest::{Client, ClientBuilder};
