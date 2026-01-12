@@ -119,6 +119,7 @@ impl PomParser {
     ) -> Result<Dependency, PomParserError> {
         let mut state = ArtifactState::default();
         let mut scope = Option::default();
+        let mut exclusions = Vec::new();
         loop {
             let event = &parser.next()?;
             match event {
@@ -146,10 +147,14 @@ impl PomParser {
                     let id = Self::string_element(parser)?;
                     scope = Some(id);
                 }
+                XmlEvent::StartElement { name, .. } if name.local_name == "exclusions" => {
+                    exclusions = Self::parse_exclusions(parser)?;
+                }
                 XmlEvent::EndElement { name, .. } if name.local_name == "dependency" => {
                     return Ok(Dependency {
                         artifact: state.to_artifact()?,
                         scope: scope.clone(),
+                        exclusions: exclusions.clone(),
                     });
                 }
                 _ => (),
@@ -217,6 +222,36 @@ impl PomParser {
                 }
                 XmlEvent::StartElement { name, .. } => {
                     state.insert(name.local_name.clone(), Self::string_element(parser)?);
+                }
+                _ => (),
+            }
+        }
+    }
+
+    fn parse_exclusions<R: Read + Seek>(
+        parser: &mut EventReader<BufReader<R>>,
+    ) -> Result<Vec<Artifact>, PomParserError> {
+        let mut state = Vec::new();
+        let mut artifact = ArtifactState::default();
+        loop {
+            let event = &parser.next()?;
+            match event {
+                XmlEvent::EndElement { name, .. } if name.local_name == "exclusions" => {
+                    return Ok(state);
+                }
+                XmlEvent::StartElement { name, .. } if name.local_name == "exclusion" => {
+                    artifact = ArtifactState::default();
+                }
+                XmlEvent::StartElement { name, .. } if name.local_name == "groupId" => {
+                    let id = Self::string_element(parser)?;
+                    artifact.group_id = Some(GroupId::from(id));
+                }
+                XmlEvent::StartElement { name, .. } if name.local_name == "artifactId" => {
+                    let id = Self::string_element(parser)?;
+                    artifact.artifact_id = Some(ArtifactId::from(id));
+                }
+                XmlEvent::EndElement { name, .. } if name.local_name == "exclusion" => {
+                    state.push(artifact.to_artifact()?);
                 }
                 _ => (),
             }

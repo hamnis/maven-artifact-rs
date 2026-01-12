@@ -7,6 +7,7 @@ use std::io::{Read, Seek};
 pub struct Dependency {
     pub artifact: Artifact,
     pub scope: Option<String>,
+    pub exclusions: Vec<Artifact>
 }
 
 impl Dependency {
@@ -14,6 +15,7 @@ impl Dependency {
         Dependency {
             artifact,
             scope: None,
+            exclusions: Vec::new()
         }
     }
 
@@ -21,6 +23,7 @@ impl Dependency {
         Dependency {
             artifact: self.artifact.resolve_properties(props),
             scope: self.scope.clone(),
+            exclusions: self.exclusions.clone()
         }
     }
 
@@ -188,6 +191,12 @@ mod test {
           <groupId>org.junit.jupiter</groupId>
           <artifactId>junit-jupiter-api</artifactId>
           <scope>test</scope>
+          <exclusions>
+            <exclusion>
+              <groupId>org.slf4j</groupId>
+              <artifactId>slf4j-api</artifactId>
+            </exclusion>
+          </exclusions>
         </dependency>
         <!-- Optionally: parameterized tests support -->
         <dependency>
